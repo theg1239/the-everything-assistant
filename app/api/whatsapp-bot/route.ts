@@ -9,6 +9,7 @@ import { normalizeTokenUsage } from '@/lib/token-usage'
 import { enforceUserRateLimit, UserRateLimitError } from '@/lib/user-rate-limiter'
 import { isJsonObject } from '@/lib/json'
 import { toToolSet } from '@/app/api/chat/lib/tool-helpers'
+import { createBackgroundTasks } from '@/app/api/chat/lib/background'
 
 type ConversationMessage = {
   role: string
@@ -156,6 +157,8 @@ async function getOrCreateBotUser(source: string, userId: string, userName?: str
 }
 
 export async function POST(request: NextRequest) {
+  // Usage rows are written after the response (the SDK awaits onStepEnd in-stream).
+  const background = createBackgroundTasks()
   try {
     const rawBody = await request.text()
 
@@ -230,28 +233,46 @@ export async function POST(request: NextRequest) {
 
     const user = await getOrCreateBotUser(requestSource, resolvedUserId, userInfo.userName)
 
-    const { defaultProviderOptions, languageModel } = await import('@/lib/ai')
-    const { createVITTools } = await import('@/lib/tools')
-    const { getUserMcpToken, refreshUserMcpToken, isExpired } = await import('@/lib/mcp-tokens')
-    const { VIT_SYSTEM_PROMPT } = await import('@/lib/prompts')
-    const { memoryService } = await import('@/lib/memory/memory-service')
-    const { smoothStream, isStepCount, streamText } = await import('ai')
+    const [
+      { defaultProviderOptions, languageModel },
+      { createVITTools },
+      { getUserMcpToken, refreshUserMcpToken, isExpired },
+      { VIT_SYSTEM_PROMPT },
+      { memoryService },
+      { isStepCount, streamText },
+      { saveTokenUsage },
+    ] = await Promise.all([
+      import('@/lib/ai'),
+      import('@/lib/tools'),
+      import('@/lib/mcp-tokens'),
+      import('@/lib/prompts'),
+      import('@/lib/memory/memory-service'),
+      import('ai'),
+      import('@/lib/db'),
+    ])
 
-    const memorySettings = await memoryService.getUserMemorySettings(user.id)
-    const isMemoryEnabled = memorySettings?.isEnabled ?? true
+    const rawMcpBase = process.env.VTOP_MCP_URL || process.env.VTOP_PROXY_URL
+    const vtopMcpEndpoint = rawMcpBase
+      ? `${rawMcpBase.replace(/\/$/, '').replace(/\/mcp$/, '')}/mcp`
+      : undefined
 
-    let memoryContext = ''
-    if (isMemoryEnabled) {
-      try {
-        const memories = await memoryService.getUserMemories(user.id, { pageSize: 50 })
-        if (memories.length > 0) {
-          memoryContext = `
+    // Memory (settings + list, read together) and the MCP token are independent lookups.
+    const loadMemoryContext = async (): Promise<string> => {
+      const [isMemoryEnabled, memories] = await Promise.all([
+        memoryService.isMemoryEnabled(user.id),
+        memoryService.getMemoriesForPrompt(user.id, 50).catch((error: unknown) => {
+          console.error(`Failed to load memories for ${requestSource} user:`, error)
+          return []
+        }),
+      ])
+      if (!isMemoryEnabled || memories.length === 0) return ''
+      return `
 <memories>
   <context>Saved information from previous ${requestSource} conversations:</context>
   <memory_list>
 ${memories
   .map(
-    (m: { content: string; updatedAt: string | number | Date }) =>
+    m =>
       `    <memory>
       <content>${m.content}</content>
       <last_updated>${new Date(m.updatedAt).toLocaleDateString()}</last_updated>
@@ -260,21 +281,12 @@ ${memories
   .join('\n')}
   </memory_list>
 </memories>`
-        }
-      } catch (error) {
-        console.error(`Failed to load memories for ${requestSource} user:`, error)
-      }
     }
-
-    const rawMcpBase = process.env.VTOP_MCP_URL || process.env.VTOP_PROXY_URL
-    const vtopMcpEndpoint = rawMcpBase
-      ? `${rawMcpBase.replace(/\/$/, '').replace(/\/mcp$/, '')}/mcp`
-      : undefined
-
-    let mcpToken = await getUserMcpToken(user.id)
-    if (mcpToken && isExpired(mcpToken)) {
-      mcpToken = await refreshUserMcpToken(user.id)
+    const loadMcpToken = async () => {
+      const token = await getUserMcpToken(user.id)
+      return token && isExpired(token) ? refreshUserMcpToken(user.id) : token
     }
+    const [memoryContext, mcpToken] = await Promise.all([loadMemoryContext(), loadMcpToken()])
 
     const allowFallback = process.env.ALLOW_MCP_FALLBACK_TOKEN === 'true'
     const fallbackToken = allowFallback
@@ -295,7 +307,7 @@ ${memories
       })
     )
 
-    if (requestSource === 'whatsapp') {
+    if (requestSource === 'whatsapp' && process.env.CHAT_DEBUG === 'true') {
       console.log('WA MCP debug', {
         userId: user.id,
         phone: userInfo.userId,
@@ -373,13 +385,13 @@ CRITICAL TOOL CONTINUATION RULES:
       messages: messagesForAI,
       tools,
       maxOutputTokens: requestSource === 'whatsapp' ? 2048 : 4096,
-      experimental_transform: smoothStream({ chunking: 'word' }),
       stopWhen: isStepCount(5),
-      onStepEnd: async ({ usage, stepNumber }) => {
-        try {
-          const usageTotals = normalizeTokenUsage(usage)
-          const { saveTokenUsage } = await import('@/lib/db')
-          await saveTokenUsage({
+      // The SDK awaits onStepEnd before continuing; write the usage row after the response.
+      onStepEnd: ({ usage, stepNumber }) => {
+        const usageTotals = normalizeTokenUsage(usage)
+        background.track(
+          `save ${requestSource} usage`,
+          saveTokenUsage({
             userId: user.id,
             chatId: null, // No specific chat for bot users
             model: botModel.modelId,
@@ -388,10 +400,10 @@ CRITICAL TOOL CONTINUATION RULES:
             outputTokens: usageTotals.outputTokens,
             totalTokens: usageTotals.totalTokens,
             meta: { source: requestSource, userId: userInfo.userId },
+          }).catch((e: unknown) => {
+            console.warn(`Failed to persist ${requestSource} usage:`, e)
           })
-        } catch (e) {
-          console.warn(`Failed to persist ${requestSource} usage:`, e)
-        }
+        )
       },
     })
 

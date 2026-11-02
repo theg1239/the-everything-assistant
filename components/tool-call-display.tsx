@@ -21,11 +21,15 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ArtifactDisplay, type ArtifactDisplayProps } from './artifact-display'
+import dynamic from 'next/dynamic'
+import type { ArtifactDisplayProps } from './artifact-display'
 import { PaperSearchProgress } from './paper-search-progress'
 import { useVTOP } from '../contexts/vtop-context'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { asRecord, readString, readText, type UnknownRecord } from '@/components/narrow'
+
+/** Artifact renderers (~140 KB) load only when a tool result renders one; SSR stays on for history. */
+const ArtifactDisplay = dynamic(() => import('./artifact-display').then(mod => mod.ArtifactDisplay))
 
 /**
  * A tool invocation as rendered by this component. `result` is the raw, unvalidated tool output;

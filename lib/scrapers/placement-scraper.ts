@@ -5,6 +5,7 @@ import Papa from 'papaparse'
 import * as z from 'zod'
 import { defaultProviderOptions, languageModel } from '@/lib/ai'
 import { enforceUserRateLimit } from '@/lib/user-rate-limiter'
+import { memoizeAsyncByKey, publicAssetUrl } from '@/lib/static-data'
 
 interface Company {
   name: string
@@ -55,29 +56,53 @@ function convertCtcToNumeric(ctc: string): number | null {
   }
 }
 
-async function readCsvFile(filePath: string): Promise<PlacementRecord[]> {
+/** CSV text from `public/placements/<fileName>`: the filesystem on Node, the public URL elsewhere. */
+async function readPlacementCsv(fileName: string): Promise<string> {
   try {
-    console.log(`Attempting to read CSV file from: ${filePath}`)
-    const fileContent = await fs.readFile(filePath, 'utf-8')
-    const result = Papa.parse<unknown>(fileContent, {
-      header: true,
-      skipEmptyLines: true,
-    })
-    const records = result.data.flatMap(row => {
-      const parsed = placementRecordSchema.safeParse(row)
-      return parsed.success ? [parsed.data] : []
-    })
-    const skipped = result.data.length - records.length
-    console.log(`Successfully read ${records.length} records from ${filePath}`)
-    if (skipped > 0) {
-      console.warn(`Skipped ${skipped} malformed placement rows in ${filePath}`)
+    return await fs.readFile(path.join(process.cwd(), 'public', 'placements', fileName), 'utf-8')
+  } catch (fsError) {
+    // No `public/` on the filesystem (Cloudflare Workers, trimmed serverless bundles).
+    const response = await fetch(publicAssetUrl(`/placements/${fileName}`))
+    if (!response.ok) {
+      throw new Error(
+        `Could not read placements/${fileName} from disk (${String(fsError)}) or URL (${response.status})`
+      )
     }
-    if (records.length > 0) {
-      console.log('Sample record:', JSON.stringify(records[0], null, 2))
-    }
-    return records
+    return response.text()
+  }
+}
+
+async function readCsvFile(fileName: string): Promise<PlacementRecord[]> {
+  const fileContent = await readPlacementCsv(fileName)
+  const result = Papa.parse<unknown>(fileContent, {
+    header: true,
+    skipEmptyLines: true,
+  })
+  const records = result.data.flatMap(row => {
+    const parsed = placementRecordSchema.safeParse(row)
+    return parsed.success ? [parsed.data] : []
+  })
+  const skipped = result.data.length - records.length
+  if (skipped > 0) {
+    console.warn(`Skipped ${skipped} malformed placement rows in ${fileName}`)
+  }
+  return records
+}
+
+/**
+ * Parsed + de-duplicated offers per CSV, once per instance (the CSVs are static assets).
+ * A read failure yields `[]` like before but is not memoised, so the next call retries.
+ */
+const loadProcessedOffers = memoizeAsyncByKey(async (fileName: string) => {
+  const records = await readCsvFile(fileName)
+  return preprocessAndFilterData(records)
+})
+
+async function getProcessedOffers(fileName: string): Promise<readonly PlacementRecord[]> {
+  try {
+    return await loadProcessedOffers(fileName)
   } catch (error) {
-    console.error(`Error reading or parsing CSV file at ${filePath}:`, error)
+    console.error(`Error reading or parsing placement CSV ${fileName}:`, error)
     return []
   }
 }
@@ -116,15 +141,10 @@ export async function scrapePlacementInfo(
   campus?: 'Vellore' | 'Chennai' | 'Amaravati' | 'Bhopal'
 ): Promise<PlacementResponse> {
   try {
-    const basePath = path.join(process.cwd(), 'public', 'placements')
-    const normalOffersPath = path.join(basePath, 'google_sheet_data.csv')
-    const witchOffersPath = path.join(basePath, 'WITCH-P.csv')
-
-    let normalOffers = await readCsvFile(normalOffersPath)
-    const witchOffers = await readCsvFile(witchOffersPath)
-
-    const processedNormalOffers = preprocessAndFilterData(normalOffers)
-    const processedWitchOffers = preprocessAndFilterData(witchOffers)
+    const [processedNormalOffers, processedWitchOffers] = await Promise.all([
+      getProcessedOffers('google_sheet_data.csv'),
+      getProcessedOffers('WITCH-P.csv'),
+    ])
 
     const shouldIncludeWitch = combineWitch || !!campus
 
@@ -143,24 +163,11 @@ export async function scrapePlacementInfo(
     }
 
     if (campus) {
-      console.log(`Filtering for campus: ${campus}`)
       const campusLower = campus.toLowerCase()
-      console.log(`Total offers before campus filter: ${processedOffers.length}`)
-
-      const allCampuses = [...new Set(processedOffers.map(o => o.Campus).filter(Boolean))]
-      console.log('All Campus values in data:', allCampuses)
-
       processedOffers = processedOffers.filter(offer => {
         if (!offer.Campus) return true
-        const offerCampus = offer.Campus.toLowerCase()
-        const matches = offerCampus.includes(campusLower)
-        if (matches) {
-          console.log(`Match found: ${offerCampus} includes ${campusLower}`)
-        }
-        return matches
+        return offer.Campus.toLowerCase().includes(campusLower)
       })
-
-      console.log(`Total offers after campus filter: ${processedOffers.length}`)
     }
 
     const totalOffers = processedOffers.length

@@ -1,5 +1,5 @@
 import { prisma } from './prisma'
-import { Prisma, type VTOPSnapshot } from '@/prisma/generated/client'
+import { Prisma } from '@/prisma/generated/client'
 import { toJsonValue } from './json'
 
 export type VTOPSnapshotPayload = {
@@ -8,15 +8,23 @@ export type VTOPSnapshotPayload = {
   fetchedAt: Date
 }
 
+/** Only the columns snapshot consumers read (skips id/userId). */
+const snapshotSelect = {
+  command: true,
+  data: true,
+  fetchedAt: true,
+} as const satisfies Prisma.VTOPSnapshotSelect
+
 export async function listVTOPSnapshots(
   userId: string,
   commands?: string[]
-): Promise<VTOPSnapshot[]> {
+): Promise<VTOPSnapshotPayload[]> {
   return prisma.vTOPSnapshot.findMany({
     where: {
       userId,
       ...(commands ? { command: { in: commands } } : {}),
     },
+    select: snapshotSelect,
     orderBy: { fetchedAt: 'desc' },
   })
 }

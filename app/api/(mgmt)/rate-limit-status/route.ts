@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { getUserRateLimiter } from '@/lib/user-rate-limiter'
 import { validateEnvironmentConfig, getEnvironmentSummary } from '@/lib/env-config'
 import {
@@ -13,7 +12,7 @@ async function requireAdmin(): Promise<NextResponse | null> {
   if (!adminEmail) {
     return NextResponse.json({ error: 'Admin access not configured' }, { status: 503 })
   }
-  const session = await getServerSession(authOptions)
+  const session = await auth()
   if (!session?.user?.email || session.user.email !== adminEmail) {
     return NextResponse.json({ error: 'Unauthorized access - admin only' }, { status: 403 })
   }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { Copy, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -8,9 +8,10 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { readJson } from '@/lib/http'
 import { errorMessage } from '@/components/narrow'
+import { CHATGPT_CONNECT_ANNOUNCEMENT_SEEN_KEY } from '@/components/chatgpt-connect-announcement-storage'
 
 const AUTO_DISMISS_DURATION = 9000
-const STORAGE_KEY = 'ea.chatgpt-connect-announcement.seen'
+const STORAGE_KEY = CHATGPT_CONNECT_ANNOUNCEMENT_SEEN_KEY
 
 interface ChatgptStatusResponse {
   available: boolean
@@ -39,9 +40,47 @@ interface ChatgptDeviceFlowState {
   verificationUrl: string | null
 }
 
+/** POSTs to a ChatGPT auth endpoint; throws with the server's error message on failure. */
+async function postChatgptAuth<T extends { error?: string }>(
+  url: string,
+  init: RequestInit,
+  fallbackError: string
+): Promise<T> {
+  const response = await fetch(url, { method: 'POST', ...init })
+  const data = await readJson<T>(response)
+  if (!response.ok) {
+    throw new Error(data?.error || fallbackError)
+  }
+  return data
+}
+
+/** Current ChatGPT connection status; null on network/HTTP failure. */
+async function readChatgptStatus(): Promise<ChatgptStatusResponse | null> {
+  try {
+    const response = await fetch('/api/auth/chatgpt/status', { cache: 'no-store' })
+    const data = await readJson<ChatgptStatusResponse>(response)
+    return response.ok ? data : null
+  } catch {
+    return null
+  }
+}
+
+/** Opens `url` in a new tab, falling back to copying it when the popup is blocked. */
+async function openOrCopyLoginUrl(url: string) {
+  const opened = window.open(url, '_blank', 'noopener,noreferrer')
+  if (opened) return
+  try {
+    await navigator.clipboard.writeText(url)
+    toast.info('Popup blocked. ChatGPT login URL copied to clipboard.')
+  } catch {
+    toast.error('Popup blocked. Please allow popups and try again.')
+  }
+}
+
 export function ChatgptConnectAnnouncementModal({ enabled }: ChatgptConnectAnnouncementModalProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const [progress, setProgress] = useState(100)
+  // Auto-dismiss countdown: time left (ms) while not running; consumed by a single timeout.
+  const remainingMsRef = useRef(AUTO_DISMISS_DURATION)
   const [isPaused, setIsPaused] = useState(false)
   const [startingChatgptLogin, setStartingChatgptLogin] = useState(false)
   const [cancelingChatgptLogin, setCancelingChatgptLogin] = useState(false)
@@ -72,103 +111,79 @@ export function ChatgptConnectAnnouncementModal({ enabled }: ChatgptConnectAnnou
   const handleOpenVerificationUrl = useCallback(async () => {
     const verificationUrl = chatgptDeviceFlow?.verificationUrl
     if (!verificationUrl) return
-
-    const opened = window.open(verificationUrl, '_blank', 'noopener,noreferrer')
-    if (!opened) {
-      try {
-        await navigator.clipboard.writeText(verificationUrl)
-        toast.info('Popup blocked. ChatGPT login URL copied to clipboard.')
-      } catch {
-        toast.error('Popup blocked. Please allow popups and try again.')
-      }
-    }
+    await openOrCopyLoginUrl(verificationUrl)
   }, [chatgptDeviceFlow])
 
   const fetchChatgptStatus = useCallback(async (): Promise<ChatgptStatusResponse | null> => {
-    try {
-      const response = await fetch('/api/auth/chatgpt/status', { cache: 'no-store' })
-      const data = await readJson<ChatgptStatusResponse>(response)
-      if (!response.ok) return null
+    const data = await readChatgptStatus()
+    if (!data) return null
 
-      if (data.connected) {
-        handleClose()
-        return data
-      }
-
-      setPendingLoginId(data.pendingLoginId ?? null)
-      setChatgptLoginError(data.lastLoginError ?? null)
-      if (!data.pendingLoginId) {
-        setChatgptDeviceFlow(null)
-      }
-
+    if (data.connected) {
+      handleClose()
       return data
-    } catch {
-      return null
     }
+
+    setPendingLoginId(data.pendingLoginId ?? null)
+    setChatgptLoginError(data.lastLoginError ?? null)
+    if (!data.pendingLoginId) {
+      setChatgptDeviceFlow(null)
+    }
+
+    return data
   }, [handleClose])
 
   const handleStartChatgptLogin = useCallback(async () => {
     setStartingChatgptLogin(true)
     setChatgptLoginError(null)
+    let data: ChatgptLoginStartResponse
     try {
-      const response = await fetch('/api/auth/chatgpt/start', {
-        method: 'POST',
-      })
-      const data = await readJson<ChatgptLoginStartResponse>(response)
-      if (!response.ok) {
-        throw new Error(data?.error || 'Unable to start ChatGPT login')
-      }
-
-      const verificationUrl = data.verificationUrl ?? data.authUrl
-      const loginId = data.loginId ?? null
-      setPendingLoginId(loginId)
-
-      if (data.deviceCode) {
-        setChatgptDeviceFlow({
-          loginId,
-          deviceCode: data.deviceCode,
-          verificationUrl,
-        })
-        toast.success('device code ready. copy it first, then continue to sign in.')
-        return
-      } else {
-        if (verificationUrl) {
-          const opened = window.open(verificationUrl, '_blank', 'noopener,noreferrer')
-          if (!opened) {
-            try {
-              await navigator.clipboard.writeText(verificationUrl)
-              toast.info('Popup blocked. ChatGPT login URL copied to clipboard.')
-            } catch {
-              toast.error('Popup blocked. Please allow popups and try again.')
-            }
-          }
-        }
-        toast.success('Complete ChatGPT sign-in in the opened browser tab.')
-        handleClose()
-      }
+      data = await postChatgptAuth<ChatgptLoginStartResponse>(
+        '/api/auth/chatgpt/start',
+        {},
+        'Unable to start ChatGPT login'
+      )
     } catch (error) {
       console.error('Error starting ChatGPT login:', error)
       toast.error(errorMessage(error) || 'Unable to start ChatGPT login')
-    } finally {
       setStartingChatgptLogin(false)
+      return
     }
+
+    const verificationUrl = data.verificationUrl ?? data.authUrl
+    const loginId = data.loginId ?? null
+    setPendingLoginId(loginId)
+
+    if (data.deviceCode) {
+      setChatgptDeviceFlow({
+        loginId,
+        deviceCode: data.deviceCode,
+        verificationUrl,
+      })
+      toast.success('device code ready. copy it first, then continue to sign in.')
+    } else {
+      if (verificationUrl) {
+        await openOrCopyLoginUrl(verificationUrl)
+      }
+      toast.success('Complete ChatGPT sign-in in the opened browser tab.')
+      handleClose()
+    }
+    setStartingChatgptLogin(false)
   }, [handleClose])
 
   const handleCancelChatgptLogin = useCallback(async () => {
     if (!pendingLoginId) return
     setCancelingChatgptLogin(true)
     try {
-      const response = await fetch('/api/auth/chatgpt/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          loginId: pendingLoginId,
-        }),
-      })
-      const data = await readJson<ChatgptStatusResponse & { error?: string }>(response)
-      if (!response.ok) {
-        throw new Error(data?.error || 'Unable to cancel ChatGPT login')
-      }
+      await postChatgptAuth<ChatgptStatusResponse>(
+        '/api/auth/chatgpt/cancel',
+        {
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            loginId: pendingLoginId,
+          }),
+        },
+        'Unable to cancel ChatGPT login'
+      )
       setPendingLoginId(null)
       setChatgptDeviceFlow(null)
       setChatgptLoginError(null)
@@ -176,9 +191,8 @@ export function ChatgptConnectAnnouncementModal({ enabled }: ChatgptConnectAnnou
     } catch (error) {
       console.error('Error canceling ChatGPT login:', error)
       toast.error(errorMessage(error) || 'Unable to cancel ChatGPT login')
-    } finally {
-      setCancelingChatgptLogin(false)
     }
+    setCancelingChatgptLogin(false)
   }, [pendingLoginId])
 
   useEffect(() => {
@@ -193,7 +207,7 @@ export function ChatgptConnectAnnouncementModal({ enabled }: ChatgptConnectAnnou
       if (data.connected) return
 
       if (data.available) {
-        setProgress(100)
+        remainingMsRef.current = AUTO_DISMISS_DURATION
         setIsOpen(true)
       }
     }
@@ -218,21 +232,16 @@ export function ChatgptConnectAnnouncementModal({ enabled }: ChatgptConnectAnnou
   useEffect(() => {
     if (!isOpen || isPaused || startingChatgptLogin || chatgptDeviceFlow) return
 
+    // One timeout per running stretch; pausing (hover/touch, login in progress, device flow)
+    // banks the time left so the countdown resumes where it stopped.
     const startTime = Date.now()
-    const startProgress = progress
+    const timeoutId = window.setTimeout(handleClose, remainingMsRef.current)
 
-    const intervalId = window.setInterval(() => {
-      const elapsed = Date.now() - startTime
-      const remaining = Math.max(0, startProgress - (elapsed / AUTO_DISMISS_DURATION) * 100)
-      setProgress(remaining)
-
-      if (remaining <= 0) {
-        handleClose()
-      }
-    }, 50)
-
-    return () => window.clearInterval(intervalId)
-  }, [isOpen, isPaused, handleClose, startingChatgptLogin, chatgptDeviceFlow, progress])
+    return () => {
+      window.clearTimeout(timeoutId)
+      remainingMsRef.current = Math.max(0, remainingMsRef.current - (Date.now() - startTime))
+    }
+  }, [isOpen, isPaused, handleClose, startingChatgptLogin, chatgptDeviceFlow])
 
   if (!enabled || !isOpen) return null
 
@@ -257,7 +266,7 @@ export function ChatgptConnectAnnouncementModal({ enabled }: ChatgptConnectAnnou
 
         <div className="relative h-24 sm:h-32 overflow-hidden">
           <Image
-            src="/onboarding-artwork/artwork6.png"
+            src="/onboarding-artwork/artwork6.webp"
             alt="ChatGPT login artwork"
             fill
             className="object-cover object-center"

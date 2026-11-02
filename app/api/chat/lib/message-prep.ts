@@ -257,11 +257,17 @@ function toModelMessage(
   return { role: 'user', content }
 }
 
+/**
+ * The system prompt is sent on EVERY turn: requests use `store: false` and no
+ * `previousResponseId`, so the provider keeps no server-side conversation state and
+ * the client only sends user/assistant messages. `systemMessages` is ordered static
+ * prompt first, per-request context after, so the large static prefix stays
+ * byte-identical across turns and hits OpenAI's prompt cache.
+ */
 export async function prepareFinalMessages(
   enhancedMessages: LegacyMessage[],
   systemMessages: SystemModelMessage[],
   prefersWebSearch: boolean,
-  includeSystemPrompt: boolean = true,
   options: PrepareMessagesOptions = {}
 ): Promise<PreparedMessagesResult> {
   const { thinkHarder = false, isAdmin = false } = options
@@ -279,9 +285,9 @@ export async function prepareFinalMessages(
 
   const instructions: SystemModelMessage[] = []
 
-  if (!prefersWebSearch && includeSystemPrompt) {
+  if (!prefersWebSearch) {
     instructions.push(...systemMessages)
-  } else if (prefersWebSearch && includeSystemPrompt) {
+  } else {
     const [firstSystemMessage] = systemMessages
     if (firstSystemMessage) instructions.push(firstSystemMessage)
   }

@@ -504,13 +504,13 @@ const PureMessageBubble = ({
 
           {/* Render ordered segments for assistant messages */}
           {!isUser && (() => {
-            let reasoningStepIndex = 0
+            // Only show step number if there are multiple reasoning segments
+            const totalReasoningSegments = orderedSegments.filter(s => s.type === 'reasoning').length
             return orderedSegments.map((segment, idx) => {
               if (segment.type === 'reasoning' && segment.reasoningText) {
-                const currentStepIndex = reasoningStepIndex
-                reasoningStepIndex++
-                // Only show step number if there are multiple reasoning segments
-                const totalReasoningSegments = orderedSegments.filter(s => s.type === 'reasoning').length
+                const currentStepIndex = orderedSegments
+                  .slice(0, idx)
+                  .filter(s => s.type === 'reasoning' && s.reasoningText).length
                 return (
                   <ReasoningPanel 
                     key={`reasoning-${idx}`}

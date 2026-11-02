@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { createVITTools } from '@/lib/tools'
 import * as z from 'zod'
 import type { JsonValue } from '@/types/tools'
@@ -24,7 +23,7 @@ const hubToolRequestSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.id) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,

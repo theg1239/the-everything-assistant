@@ -1,7 +1,6 @@
 import { generateText } from 'ai'
-import { getServerSession } from 'next-auth'
 import { defaultProviderOptions, languageModel } from '@/lib/ai'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { getCurrentVITContext } from '@/lib/data/context-integration'
 import { enforceUserRateLimit } from '@/lib/user-rate-limiter'
 
@@ -17,7 +16,7 @@ export async function generateFollowUpSuggestions(
 ): Promise<string[]> {
   try {
 
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     const userId = session?.user?.id
 
     // Build conversation context from history

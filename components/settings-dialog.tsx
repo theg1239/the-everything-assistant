@@ -273,6 +273,8 @@ interface SettingsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onTriggerOnboarding?: () => void
+  /** Section shown when the dialog first mounts (it is mounted lazily, on first open). */
+  initialSection?: string
 }
 
 interface SettingsMenuItem {
@@ -281,12 +283,18 @@ interface SettingsMenuItem {
   icon: LucideIcon
 }
 
-export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: SettingsDialogProps) {
+export function SettingsDialog({
+  open,
+  onOpenChange,
+  onTriggerOnboarding,
+  initialSection,
+}: SettingsDialogProps) {
   const { data: session } = useSession()
   const { setBackgroundType, toggleBackground } = useCustomBackground()
   const { setIsOpen: setSidebarOpen } = useSidebar()
-  const { enabled: miniPlayerEnabled, setEnabled: setMiniPlayerEnabled } = useMiniPlayerStore()
-  const [activeSection, setActiveSection] = useState('general')
+  const miniPlayerEnabled = useMiniPlayerStore(state => state.enabled)
+  const setMiniPlayerEnabled = useMiniPlayerStore(state => state.setEnabled)
+  const [activeSection, setActiveSection] = useState(initialSection ?? 'general')
   const [pendingSection, setPendingSection] = useState<string | null>(null)
   const [followUpSuggestions, setFollowUpSuggestions] = useState(true)
   const [backgroundConfig, setBackgroundConfig] = useState<{

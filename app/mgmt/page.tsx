@@ -1,6 +1,5 @@
 import ManagementClient from './management-client'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 
 
 const EMOJI_SET_NEAR = ['🤡', '🦄', '🪄', '🌈', '🥳', '🍩', '☕', '🛸', '👾', '🧪']
@@ -352,7 +351,7 @@ function Wall({
 
 
 export default async function ManagementPage() {
-  const session = await getServerSession(authOptions)
+  const session = await auth()
   const adminEmail = process.env.RATE_LIMIT_ADMIN_EMAIL ?? 'admin@example.com'
 
   if (!process.env.RATE_LIMIT_ADMIN_EMAIL) {

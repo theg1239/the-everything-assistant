@@ -21,6 +21,7 @@ import { createFeedbackIssue } from './feedback'
 import { hasVTOPCredentials, getFormattedVTOPCredentials } from './server-vtop-credentials'
 import { getUserMcpToken, refreshUserMcpToken, isExpired as isMcpExpired } from './mcp-tokens'
 import { createMusicPlayerTool, type MusicPlayerToolState } from './music-player-tool'
+import { memoizeAsync, publicAssetUrl } from './static-data'
 // import {
 //   indexPastPapers,
 //   askIndexedPaperQuestion,
@@ -150,6 +151,38 @@ const syllabusEntrySchema: z.ZodType<SyllabusEntry> = z.union([
 const syllabusListSchema = z.array(syllabusEntrySchema)
 
 type FacultyData = z.infer<typeof facultyDataSchema>
+
+/** Per-call tool tracing; off unless CHAT_DEBUG=true (these run on the chat hot path). */
+const debugLog = (...args: unknown[]) => {
+  if (process.env.CHAT_DEBUG === 'true') console.debug(...args)
+}
+
+/** `public/faculty.json` (~520 KB), fetched and validated once per instance. */
+const loadFacultyData = memoizeAsync(async (): Promise<FacultyData> => {
+  const res = await fetch(publicAssetUrl('/faculty.json'))
+  if (!res.ok) throw new Error('Could not load faculty.json')
+  return facultyDataSchema.parse(await res.json())
+})
+
+class SyllabiLoadError extends Error {
+  constructor(readonly status: number) {
+    super(`Could not load syllabi.json (${status})`)
+  }
+}
+
+/** `public/syllabi.json`, fetched and filtered to well-formed entries once per instance. */
+const loadSyllabusEntries = memoizeAsync(async (): Promise<SyllabusEntry[]> => {
+  const res = await fetch(publicAssetUrl('/syllabi.json'))
+  if (!res.ok) throw new SyllabiLoadError(res.status)
+  const data: unknown = await res.json()
+  // Keep only entries that are a filename or a `{ code, title, file }` record.
+  return Array.isArray(data)
+    ? data.flatMap(entry => {
+        const parsedEntry = syllabusEntrySchema.safeParse(entry)
+        return parsedEntry.success ? [parsedEntry.data] : []
+      })
+    : []
+})
 
 const vtopErrorResponseSchema = z
   .object({
@@ -873,13 +906,12 @@ async function handleIntelligentCoursePage(params: {
   }
   if (contextualFacultyQuery || facultyQuery) {
     requestBody.flags.facultyQuery = contextualFacultyQuery || facultyQuery
-    if (contextualFacultyQuery)
-      console.log('Using contextual faculty query:', contextualFacultyQuery)
+    if (contextualFacultyQuery) debugLog('Using contextual faculty query:', contextualFacultyQuery)
   }
   if (contextualMaterialQuery || materialQuery) {
     requestBody.flags.materialQuery = contextualMaterialQuery || materialQuery
     if (contextualMaterialQuery)
-      console.log('Using contextual material query:', contextualMaterialQuery)
+      debugLog('Using contextual material query:', contextualMaterialQuery)
   }
 
   if (semester !== undefined) requestBody.flags.semester = semester
@@ -1522,13 +1554,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       }),
       execute: async ({ department, facultyName, includeCourses = false, school, courseQuery }) => {
         try {
-          const res = await fetch(
-            typeof window === 'undefined'
-              ? `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/faculty.json`
-              : '/faculty.json'
-          )
-          if (!res.ok) throw new Error('Could not load faculty.json')
-          const schools = facultyDataSchema.parse(await res.json())
+          const schools = await loadFacultyData()
 
           const results: FacultyResultEntry[] = []
           const deptFilter = department ? department.toLowerCase() : null
@@ -1913,7 +1939,6 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       }),
       execute: async ({ query }) => {
         try {
-          console.debug('[getSyllabus] query:', query)
           if (!query || query.trim().length === 0) {
             return {
               success: false,
@@ -1922,31 +1947,17 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             }
           }
 
-          const base =
-            typeof window === 'undefined'
-              ? process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
-              : ''
-          const res = await fetch(`${base}/syllabi.json`)
-          if (!res.ok) {
-            console.error('[getSyllabus] could not load syllabi.json', res.status)
+          let entries: SyllabusEntry[]
+          try {
+            entries = await loadSyllabusEntries()
+          } catch (loadError) {
+            if (!(loadError instanceof SyllabiLoadError)) throw loadError
+            console.error('[getSyllabus] could not load syllabi.json', loadError.status)
             return {
               success: false,
-              error: `Could not load syllabi.json (${res.status})`,
+              error: loadError.message,
             }
           }
-
-          const data: unknown = await res.json()
-          console.debug(
-            '[getSyllabus] loaded items:',
-            Array.isArray(data) ? data.length : 'unknown'
-          )
-          // Keep only entries that are a filename or a `{ code, title, file }` record.
-          const entries: SyllabusEntry[] = Array.isArray(data)
-            ? data.flatMap(entry => {
-                const parsedEntry = syllabusEntrySchema.safeParse(entry)
-                return parsedEntry.success ? [parsedEntry.data] : []
-              })
-            : []
 
           const qRaw = query.trim()
           const q = qRaw.toLowerCase()
@@ -1999,7 +2010,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               const fileNames = entries.filter(entry => typeof entry === 'string')
               const exact = fileNames.find(fn => (fn.split('_')[0] ?? '').toLowerCase() === q)
               if (exact) {
-                console.debug('[getSyllabus] exact code match:', exact)
+                debugLog('[getSyllabus] exact code match:', exact)
                 const norm = normalizeFilename(exact)
                 return {
                   success: true,
@@ -2014,7 +2025,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               const scored = fileNames
                 .map(fn => ({ fn, score: scoreCandidate(fn) }))
                 .sort((a, b) => b.score - a.score)
-              console.debug('[getSyllabus] top candidates (string):', scored.slice(0, 5))
+              debugLog('[getSyllabus] top candidates (string):', scored.slice(0, 5))
               const [top] = scored
               if (top && top.score > 0) {
                 const topScore = top.score
@@ -2058,7 +2069,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               const scored = entries
                 .map(item => ({ item: fieldsOf(item), score: scoreCandidate(item) }))
                 .sort((a, b) => b.score - a.score)
-              console.debug(
+              debugLog(
                 '[getSyllabus] top candidates (objects):',
                 scored.slice(0, 6).map(s => ({
                   code: s.item.code,
@@ -2165,7 +2176,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             }
           } catch {}
 
-          console.debug('[getSyllabus] no match for query:', query)
+          debugLog('[getSyllabus] no match for query:', query)
           return {
             success: false,
             query,

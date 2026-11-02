@@ -1,11 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { revalidateBroadcasts } from '@/lib/broadcast'
 import { broadcastPayloadSchema, type BroadcastPayload } from '@/types/api/broadcast'
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions)
+  const session = await auth()
 
   if (session?.user?.email !== process.env.RATE_LIMIT_ADMIN_EMAIL) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
         slides: payload.slides,
       },
     })
+    revalidateBroadcasts()
 
     return NextResponse.json(
       {

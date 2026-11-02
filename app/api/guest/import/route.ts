@@ -1,5 +1,4 @@
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { createChat, getChat, saveMessage } from '@/lib/db'
 import { extractTitleFromContent, generateUUID } from '@/lib/utils'
 import {
@@ -24,7 +23,7 @@ const importPayloadSchema = z.object({
 })
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions)
+  const session = await auth()
 
   if (!session?.user?.id) {
     return new Response('Unauthorized', { status: 401 })

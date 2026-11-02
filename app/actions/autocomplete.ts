@@ -1,7 +1,6 @@
 'use server'
 
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { generateText } from 'ai'
 import { defaultProviderOptions, languageModel } from '@/lib/ai'
 import { enforceUserRateLimit } from '@/lib/user-rate-limiter'
@@ -23,7 +22,7 @@ export async function getAutocompleteSuggestionAction(input: {
   partial: string
   recentMessages?: RecentMessage[]
 }): Promise<string> {
-  const session = await getServerSession(authOptions)
+  const session = await auth()
   const userId = session?.user?.id
 
   if (!userId) {

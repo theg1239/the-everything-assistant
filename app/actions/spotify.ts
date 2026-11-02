@@ -1,7 +1,6 @@
 'use server'
 
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import {
   SpotifyApiError,
   SpotifyNotLinkedError,
@@ -31,7 +30,7 @@ const spotifyProfileSchema = z.object({
 })
 
 async function requireSession() {
-  const session = await getServerSession(authOptions)
+  const session = await auth()
   if (!session?.user?.id) {
     throw new Error('unauthorized')
   }
@@ -41,7 +40,7 @@ async function requireSession() {
 export async function getSpotifyStatusAction(): Promise<SpotifyStatusResponse> {
   const enabled = isSpotifyEnabled()
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.id) {
       return { enabled, connected: false }
     }
@@ -88,7 +87,7 @@ export async function getSpotifyStatusAction(): Promise<SpotifyStatusResponse> {
 
 export async function getSpotifyPlaybackAction(): Promise<SpotifyPlaybackResponse> {
   const enabled = isSpotifyEnabled()
-  const session = await getServerSession(authOptions)
+  const session = await auth()
 
   if (!session?.user?.id) {
     return { enabled, connected: false }

@@ -1,5 +1,4 @@
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { createVITTools } from '@/lib/tools'
 import { getFormattedVTOPCredentials as getServerFormatted } from '@/lib/server-vtop-credentials'
 import { Output, streamText } from 'ai'
@@ -19,7 +18,7 @@ const vtopRequestSchema = z.object({
 export const maxDuration = 30
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions)
+  const session = await auth()
   if (!session?.user?.id) {
     return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 })
   }

@@ -1,5 +1,4 @@
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { saveVote } from '@/lib/db'
 import * as z from 'zod'
 
@@ -13,7 +12,7 @@ const voteSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.id) {
       return new Response('Unauthorized', { status: 401 })
     }

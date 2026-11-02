@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { getMessages } from '@/lib/db'
 import { prisma } from '@/lib/prisma'
 
@@ -12,7 +11,7 @@ export async function GET(req: NextRequest, { params }: { params: ChatParams }) 
   try {
     const { chatId } = await params
 
-    const session = await getServerSession(authOptions)
+    const session = await auth()
 
     const adminEmail = process.env.RATE_LIMIT_ADMIN_EMAIL
     if (!adminEmail) {

@@ -1,9 +1,10 @@
 'use client'
 
-import { createContext, useContext, ReactNode, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, ReactNode, useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
-import { useMemories, useMemorySettings } from '@/hooks/use-memories'
-import type { MemoryWithId } from '@/hooks/use-memories'
+import { useMemories } from '@/hooks/use-memories'
+import type { MemorySettings, MemoryWithId } from '@/hooks/use-memories'
 
 interface MemoryContextType {
   memories: MemoryWithId[]
@@ -25,24 +26,61 @@ interface MemoryContextType {
   }) => Promise<void>
 }
 
-const MemoryContext = createContext<MemoryContextType | undefined>(undefined)
+interface MemoryContextInternal extends MemoryContextType {
+  /** Start fetching memories + settings (idempotent). */
+  activate: () => void
+}
 
+/**
+ * Same query key / endpoint as `useMemorySettings` in hooks/use-memories, but
+ * gated on `enabled` so nothing is fetched until a consumer asks for the data.
+ */
+const MEMORY_SETTINGS_QUERY_KEY = ['memorySettings'] as const
+
+function useLazyMemorySettings(enabled: boolean) {
+  return useQuery<MemorySettings, Error>({
+    queryKey: MEMORY_SETTINGS_QUERY_KEY,
+    queryFn: async () => {
+      const response = await fetch('/api/memories/settings')
+      if (!response.ok) {
+        throw new Error('Failed to fetch memory settings')
+      }
+      return response.json()
+    },
+    enabled,
+    staleTime: 1000 * 60 * 10,
+    gcTime: 1000 * 60 * 30,
+    refetchOnWindowFocus: false,
+    retry: 1,
+    placeholderData: previousData => previousData,
+  })
+}
+
+const MemoryContext = createContext<MemoryContextInternal | undefined>(undefined)
+
+/**
+ * Memory data is loaded lazily: nothing is fetched on page load, only once some
+ * component calls `useMemory()` (which activates the provider on mount).
+ */
 export function MemoryProvider({ children }: { children: ReactNode }) {
   const { data: session } = useSession()
+  const [active, setActive] = useState(false)
+  const activate = useCallback(() => setActive(true), [])
+  const enabled = active && Boolean(session?.user)
 
   const {
     data: memoriesData,
     isLoading: isMemoriesLoading,
     error: memoriesError,
     refetch: refetchMemories,
-  } = useMemories()
+  } = useMemories({ enabled: active })
 
   const {
     data: settingsData,
     isLoading: isSettingsLoading,
     error: settingsError,
     refetch: refetchSettings,
-  } = useMemorySettings()
+  } = useLazyMemorySettings(enabled)
 
   const memories = memoriesData?.data || []
   const isLoading = isMemoriesLoading || isSettingsLoading
@@ -141,7 +179,8 @@ export function MemoryProvider({ children }: { children: ReactNode }) {
     await refetchSettings()
   }
 
-  const contextValue: MemoryContextType = {
+  const contextValue: MemoryContextInternal = {
+    activate,
     memories,
     isLoading,
     error,
@@ -160,10 +199,14 @@ export function MemoryProvider({ children }: { children: ReactNode }) {
   return <MemoryContext.Provider value={contextValue}>{children}</MemoryContext.Provider>
 }
 
-export function useMemory() {
+export function useMemory(): MemoryContextType {
   const context = useContext(MemoryContext)
   if (context === undefined) {
     throw new Error('useMemory must be used within a MemoryProvider')
   }
+  const { activate } = context
+  useEffect(() => {
+    activate()
+  }, [activate])
   return context
 }

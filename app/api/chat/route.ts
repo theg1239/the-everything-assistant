@@ -1,11 +1,11 @@
 import {
   createUIMessageStream,
-  smoothStream,
   createUIMessageStreamResponse,
   generateId,
   isStepCount,
   consumeStream,
   streamText,
+  type InferUIMessageChunk,
   type ModelMessage,
   type StepResult,
   type StreamTextEndEvent,
@@ -16,9 +16,15 @@ import type { OpenAILanguageModelResponsesOptions } from '@ai-sdk/openai'
 import { defaultProviderOptions, openai } from '@/lib/ai'
 import { getErrorText } from '@/lib/ai-stream-fallback'
 import { createVITTools } from '@/lib/tools'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { getChat, createChat, saveMessage, updateChat } from '@/lib/db'
+import { auth } from '@/lib/auth'
+import {
+  getChat,
+  createChat,
+  saveMessage,
+  saveTokenUsage,
+  updateChat,
+  updateMessageToolInvocations,
+} from '@/lib/db'
 import { extractTitleFromContent } from '@/lib/utils'
 import { sanitizeToolInvocations } from '@/lib/sanitize-tools'
 import { normalizeTokenUsage } from '@/lib/token-usage'
@@ -30,8 +36,11 @@ import {
 } from '@/lib/ai-message-conversion'
 import type { Attachment } from '@/types/attachment'
 import { fetchMCPTools, closeMCPClients } from '@/lib/mcp-server'
+import type { MCPClientConfig } from '@/lib/mcp-config'
 import {
-  getChatgptStatus,
+  invalidateChatgptStatus,
+  isChatgptConnectedCached,
+  isCodexConfigured,
   runChatgptManagedTurn,
   type CodexToolEvent,
   type RunChatgptTurnResult,
@@ -60,6 +69,7 @@ import {
 import { buildMemoryContext } from './lib/memory-context'
 import { enhanceMessagesWithToolContext, prepareFinalMessages } from './lib/message-prep'
 import { buildSystemPrompt } from './lib/prompt'
+import { createBackgroundTasks, type BackgroundTasks } from './lib/background'
 
 const getMessageText = (message: LegacyMessage | null | undefined): string => message?.content ?? ''
 
@@ -131,14 +141,88 @@ type CodexToolInvocation = {
 /** A tool result from the model run, or the request's direct tool call. */
 type FinishedToolResult = TypedToolResult<ToolSet> | DirectToolCallResult
 
-export async function POST(req: Request) {
+type AppUIMessageChunk = InferUIMessageChunk<AppUIMessage>
+
+/** Verbose per-request logging (tool groups, MCP lifecycle, save confirmations). */
+const chatDebug = () => process.env.CHAT_DEBUG === 'true'
+
+type LoadedMCPTools = Awaited<ReturnType<typeof fetchMCPTools>>
+
+const NO_MCP_TOOLS: LoadedMCPTools = { tools: {}, clients: [], errors: [] }
+
+/** Connects the request's MCP servers; never throws (a failure means "no MCP tools"). */
+async function loadMCPTools(configs: MCPClientConfig[] | undefined): Promise<LoadedMCPTools> {
+  if (!configs || configs.length === 0) return NO_MCP_TOOLS
   try {
-    const session = await getServerSession(authOptions)
+    const result = await fetchMCPTools(configs)
+    if (chatDebug() && Object.keys(result.tools).length > 0) {
+      console.log(
+        `[MCP] Loaded ${Object.keys(result.tools).length} tools from ${result.clients.length} MCP servers`
+      )
+    }
+    if (result.errors.length > 0) {
+      console.warn(
+        '[MCP] Some MCP servers failed to connect:',
+        result.errors.map(e => `${e.config.name}: ${e.error}`)
+      )
+    }
+    return result
+  } catch (error) {
+    console.error('[MCP] Failed to fetch MCP tools:', error)
+    // Continue without MCP tools - don't fail the request
+    return NO_MCP_TOOLS
+  }
+}
+
+/** Closes MCP clients after the response instead of holding the stream open for it. */
+function closeMCPClientsLater(background: BackgroundTasks, clients: LoadedMCPTools['clients']) {
+  if (clients.length === 0) return
+  background.track(
+    'close MCP clients',
+    closeMCPClients(clients).then(() => {
+      if (chatDebug()) console.log(`[MCP] Closed ${clients.length} MCP client(s)`)
+    })
+  )
+}
+
+/**
+ * Holds the UI stream's `finish` chunk until the generated title is known and puts it in
+ * the finish metadata (as before, when the title was awaited before streaming). Text
+ * deltas are never delayed; only the end marker waits, and only if the title (5 s cap)
+ * is slower than the whole answer.
+ */
+function withFinalTitle(
+  stream: ReadableStream<AppUIMessageChunk>,
+  titleReady: Promise<string>
+): ReadableStream<AppUIMessageChunk> {
+  return stream.pipeThrough(
+    new TransformStream<AppUIMessageChunk, AppUIMessageChunk>({
+      async transform(chunk, controller) {
+        if (chunk.type !== 'finish') {
+          controller.enqueue(chunk)
+          return
+        }
+        const chatTitle = await titleReady
+        controller.enqueue({
+          ...chunk,
+          messageMetadata: { ...chunk.messageMetadata, chatTitle },
+        })
+      },
+    })
+  )
+}
+
+export async function POST(req: Request) {
+  // Registered first: `after()` (used for post-response work) needs the request scope.
+  const background = createBackgroundTasks()
+  try {
+    const bodyPromise: Promise<unknown> = req.json().catch(() => null)
+    const session = await auth()
     if (!session?.user?.id) {
       return new Response('Unauthorized', { status: 401 })
     }
     const userId = session.user.id
-    const rawPayload: unknown = await req.json().catch(() => null)
+    const rawPayload = await bodyPromise
     const payload = parseChatRequestPayload(rawPayload)
     if (!payload) {
       return new Response('Invalid request body', { status: 400 })
@@ -158,52 +242,116 @@ export async function POST(req: Request) {
         ? requestedChatId
         : generateId()
 
-    let chat = normalizedChatId ? await getChat(normalizedChatId, userId) : null
-    const isExistingChat = !!chat
-    if (!chat) {
-      const initialContent = getMessageText(messages[0])
-      const tempTitle = extractTitleFromContent(initialContent || 'New Chat')
-      const path = `/chat/${normalizedChatId}`
-      const createdChat = await createChat(userId, tempTitle, path, normalizedChatId)
-      chat = createdChat
+    const initialContent = getMessageText(messages[0])
+    const tempTitle = extractTitleFromContent(initialContent || 'New Chat')
 
-      const userMessage = initialContent
-      if (userMessage.trim()) {
-        try {
-          const properTitle = await generateChatTitle(userMessage, userId)
-          if (properTitle !== tempTitle) {
-            await updateChat(createdChat.id, properTitle)
-            createdChat.title = properTitle
-            console.debug('Chat title updated successfully')
-          }
-        } catch (error) {
-          console.error('Failed to update chat title:', error)
-        }
-      }
-    }
-
-    let directToolCallResult: DirectToolCallResult | null = null
-    let directToolCallExecuted = false
-
-    if (directToolCall) {
-      const { result, executed } = await executeDirectToolCall({
-        directToolCall,
-        messages,
+    // Existing chat, or a new one created with the temporary title. For new chats the
+    // LLM title starts right away (in parallel with everything below) and is saved
+    // off the critical path; the stream's finish metadata still carries it.
+    const chatSetupPromise = (async () => {
+      const existing = await getChat(normalizedChatId, userId)
+      if (existing) return { chat: existing, generatedTitle: null }
+      const generatedTitle = initialContent.trim()
+        ? generateChatTitle(initialContent, userId)
+        : null
+      const created = await createChat(
         userId,
-      })
-      directToolCallResult = result
-      directToolCallExecuted = executed
-    }
+        tempTitle,
+        `/chat/${normalizedChatId}`,
+        normalizedChatId
+      )
+      return { chat: created, generatedTitle }
+    })()
 
-    let useCodexManagedUsage = false
+    // The user message is persisted concurrently with model start-up; the assistant
+    // message save awaits it, so DB order (created_at) stays user -> assistant.
+    const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null
+    const userMessageSaved: Promise<boolean> =
+      lastMessage?.role === 'user'
+        ? chatSetupPromise
+            .then(({ chat }) => {
+              const persistedAttachments = extractAttachmentsFromParts(lastMessage.parts)
+              return saveMessage(
+                chat.id,
+                'user',
+                getMessageText(lastMessage),
+                undefined,
+                lastMessage.id,
+                persistedAttachments.length ? persistedAttachments : undefined
+              )
+            })
+            .then(
+              () => true,
+              (error: unknown) => {
+                console.error('Failed to save user message:', error)
+                return false
+              }
+            )
+        : Promise.resolve(true)
+    background.track('save user message', userMessageSaved)
+
+    // Only the model path is user-rate-limited. When neither a direct tool call nor
+    // Codex can take over this request, run the (single round-trip) check concurrently.
+    const codexConfigured = isCodexConfigured()
+    const earlyRateLimit = !directToolCall && !codexConfigured ? enforceUserRateLimit(userId) : null
+    // Handled where it is awaited; this only prevents an unhandled-rejection report meanwhile.
+    earlyRateLimit?.catch(() => undefined)
+
+    const mcpPromise = loadMCPTools(payload.mcpConfigs)
+
+    let parallelReads: [
+      Awaited<typeof chatSetupPromise>,
+      boolean,
+      Awaited<ReturnType<typeof buildMemoryContext>>,
+      Awaited<ReturnType<typeof executeDirectToolCall>> | null,
+      LoadedMCPTools,
+    ]
     try {
-      const chatgptStatus = await getChatgptStatus(userId)
-      useCodexManagedUsage = chatgptStatus.connected
+      parallelReads = await Promise.all([
+        chatSetupPromise,
+        codexConfigured ? isChatgptConnectedCached(userId) : Promise.resolve(false),
+        buildMemoryContext(userId),
+        directToolCall
+          ? executeDirectToolCall({ directToolCall, messages, userId })
+          : Promise.resolve(null),
+        mcpPromise,
+      ])
     } catch (error) {
-      console.warn('[Chat] Unable to read codex ChatGPT status, falling back to API key', error)
+      background.track(
+        'close MCP clients',
+        mcpPromise.then(({ clients }) => closeMCPClients(clients))
+      )
+      throw error
     }
+    const [
+      { chat, generatedTitle },
+      useCodexManagedUsage,
+      { context: memoryContext, isEnabled: isMemoryEnabled },
+      directToolCallOutcome,
+      mcpResult,
+    ] = parallelReads
+    const mcpClients = mcpResult.clients
+
+    const titleReady: Promise<string> | null = generatedTitle
+      ? generatedTitle.then(async properTitle => {
+          if (properTitle === chat.title) return chat.title
+          try {
+            await updateChat(chat.id, properTitle)
+            if (chatDebug()) console.debug('Chat title updated successfully')
+            return properTitle
+          } catch (error) {
+            console.error('Failed to update chat title:', error)
+            return chat.title
+          }
+        })
+      : null
+    if (titleReady) background.track('generate chat title', titleReady)
+
+    const directToolCallResult: DirectToolCallResult | null = directToolCallOutcome?.result ?? null
+    const directToolCallExecuted = directToolCallOutcome?.executed ?? false
 
     if (!useCodexManagedUsage && !process.env.OPENAI_API_KEY) {
+      closeMCPClientsLater(background, mcpClients)
       return jsonResponse(
         {
           error: 'API key not configured. Please add OPENAI_API_KEY to your environment variables.',
@@ -211,22 +359,6 @@ export async function POST(req: Request) {
         500
       )
     }
-
-    const userMessage = messages.length > 0 ? messages[messages.length - 1] : null
-    if (userMessage?.role === 'user') {
-      const persistedContent = getMessageText(userMessage)
-      const persistedAttachments = extractAttachmentsFromParts(userMessage.parts)
-      await saveMessage(
-        chat.id,
-        'user',
-        persistedContent,
-        undefined,
-        userMessage.id,
-        persistedAttachments.length ? persistedAttachments : undefined
-      )
-    }
-
-    const { context: memoryContext, isEnabled: isMemoryEnabled } = await buildMemoryContext(userId)
 
     const baseTools = toToolSet(
       createVITTools(userId, {
@@ -237,27 +369,8 @@ export async function POST(req: Request) {
     const prefersWebSearch = effectivePreferredTool === 'web-search'
     let tools: ToolSet = baseTools
 
-    let mcpClients: Awaited<ReturnType<typeof fetchMCPTools>>['clients'] = []
-    if (payload.mcpConfigs && payload.mcpConfigs.length > 0) {
-      try {
-        const mcpResult = await fetchMCPTools(payload.mcpConfigs)
-        if (Object.keys(mcpResult.tools).length > 0) {
-          tools = { ...tools, ...mcpResult.tools }
-          mcpClients = mcpResult.clients
-          console.log(
-            `[MCP] Loaded ${Object.keys(mcpResult.tools).length} tools from ${mcpClients.length} MCP servers`
-          )
-        }
-        if (mcpResult.errors.length > 0) {
-          console.warn(
-            '[MCP] Some MCP servers failed to connect:',
-            mcpResult.errors.map(e => `${e.config.name}: ${e.error}`)
-          )
-        }
-      } catch (error) {
-        console.error('[MCP] Failed to fetch MCP tools:', error)
-        // Continue without MCP tools - don't fail the request
-      }
+    if (Object.keys(mcpResult.tools).length > 0) {
+      tools = { ...tools, ...mcpResult.tools }
     }
 
     if (prefersWebSearch) {
@@ -285,7 +398,9 @@ export async function POST(req: Request) {
       }
       if (Object.keys(filtered).length > 0) {
         tools = filtered
-        console.log(`[Chat] Applied tool group "${group.id}" -> ${Object.keys(tools).join(', ')}`)
+        if (chatDebug()) {
+          console.log(`[Chat] Applied tool group "${group.id}" -> ${Object.keys(tools).join(', ')}`)
+        }
       }
     }
 
@@ -310,6 +425,7 @@ export async function POST(req: Request) {
       const directResultPayload = getToolOutputPayload(directToolCallResult)
       const formattedContent = readString(directResultPayload, 'formatted_content')
       if (directResultPayload && formattedContent) {
+        closeMCPClientsLater(background, mcpClients)
         const responseText = formattedContent
         const responseId = directToolCallResult.toolCallId || `direct-${Date.now()}`
         const { stream, safeInvocations } = createDirectToolCallStream(
@@ -322,12 +438,16 @@ export async function POST(req: Request) {
           responseText
         )
 
+        await userMessageSaved
         try {
           await saveMessage(chat.id, 'assistant', responseText, safeInvocations, responseId)
-          console.debug('Direct tool call message saved with tool invocation')
+          if (chatDebug()) console.debug('Direct tool call message saved with tool invocation')
         } catch (error) {
           console.error('Failed to save direct tool call message:', error)
         }
+        // This path emits no title metadata; the client reads the title from the DB on
+        // finish, so make sure it's written (it ran in parallel with the tool call).
+        if (titleReady) await titleReady
 
         return createUIMessageStreamResponse({
           headers: {
@@ -349,18 +469,16 @@ export async function POST(req: Request) {
       instructions,
       messages: finalMessages,
       model,
-    } = await prepareFinalMessages(
-      enhancedMessages,
-      systemMessages,
-      finalPrefersWebSearch,
-      !isExistingChat,
-      { thinkHarder: thinkHarder ?? false, isAdmin }
-    )
+    } = await prepareFinalMessages(enhancedMessages, systemMessages, finalPrefersWebSearch, {
+      thinkHarder: thinkHarder ?? false,
+      isAdmin,
+    })
     const openaiPromptCacheKey = `pc:v1:${chat.id.slice(0, 40)}`
     const effectiveProvider = model.provider
     const effectiveModelId = model.modelId
 
     if (finalMessages.length === 0) {
+      closeMCPClientsLater(background, mcpClients)
       const fallbackText = "i'm on standby — ask a question or run a tool so i know what to do."
       const encoder = new TextEncoder()
       const stream = new ReadableStream({
@@ -384,9 +502,6 @@ export async function POST(req: Request) {
         },
       })
     }
-
-    // Narrowed `chat` for the callbacks below.
-    const activeChat = chat
 
     if (useCodexManagedUsage) {
       const codexPrompt = buildCodexPromptFromMessages(finalMessages)
@@ -477,6 +592,10 @@ export async function POST(req: Request) {
                   delta,
                 })
               },
+            }).catch((error: unknown) => {
+              // The cached "connected" flag may be stale (e.g. token revoked); re-check next time.
+              background.track('invalidate codex status', invalidateChatgptStatus(userId))
+              throw error
             })
 
             if (!streamedText && codexResult.text) {
@@ -497,63 +616,55 @@ export async function POST(req: Request) {
               Array.from(codexToolInvocationsById.values())
             )
 
+            await userMessageSaved
             try {
-              await saveMessage(
-                activeChat.id,
-                'assistant',
-                persistedText,
-                safeInvocations,
-                responseId
-              )
+              await saveMessage(chat.id, 'assistant', persistedText, safeInvocations, responseId)
             } catch (error) {
               console.error('Failed to save codex managed message:', error)
             }
 
-            if (codexResult.usage) {
-              try {
-                const { saveTokenUsage } = await import('@/lib/db')
-                await saveTokenUsage({
+            const usage = codexResult.usage
+            if (usage) {
+              background.track(
+                'save codex usage',
+                saveTokenUsage({
                   userId,
-                  chatId: activeChat.id,
+                  chatId: chat.id,
                   model: codexResult.model || 'codex/chatgpt-managed',
                   stepIndex: null,
-                  inputTokens: codexResult.usage.inputTokens,
-                  outputTokens: codexResult.usage.outputTokens,
-                  totalTokens: codexResult.usage.totalTokens,
+                  inputTokens: usage.inputTokens,
+                  outputTokens: usage.outputTokens,
+                  totalTokens: usage.totalTokens,
                   meta: {
                     type: 'final',
                     provider: 'codex-app-server',
                     authMode: 'chatgpt',
-                    cachedInputTokens: codexResult.usage.cachedInputTokens,
-                    reasoningOutputTokens: codexResult.usage.reasoningOutputTokens,
+                    cachedInputTokens: usage.cachedInputTokens,
+                    reasoningOutputTokens: usage.reasoningOutputTokens,
                   },
                 })
-              } catch (error) {
-                console.warn('Failed to persist codex managed usage:', error)
-              }
+              )
             }
+
+            // No title metadata on this path either: keep the DB title ready by stream end.
+            if (titleReady) await titleReady
           } finally {
-            if (mcpClients.length > 0) {
-              await closeMCPClients(mcpClients)
-              console.log(`[MCP] Closed ${mcpClients.length} MCP client(s)`)
-            }
+            closeMCPClientsLater(background, mcpClients)
           }
         },
       })
 
       return createUIMessageStreamResponse({
         headers: {
-          'X-Chat-Id': activeChat.id,
-          'X-Chat-Path': `/chat/${activeChat.id}`,
-          'X-Chat-Title': activeChat.title,
+          'X-Chat-Id': chat.id,
+          'X-Chat-Path': `/chat/${chat.id}`,
+          'X-Chat-Title': chat.title,
           'X-Chat-Provider': 'codex-chatgpt',
         },
         stream,
         consumeSseStream: consumeStream,
       })
     }
-
-    let savedFinalStepUsage = false
 
     const parsedOpenAIMaxOutputTokens = Number.parseInt(
       process.env.OPENAI_MAX_OUTPUT_TOKENS || '8000',
@@ -580,27 +691,18 @@ export async function POST(req: Request) {
       } satisfies OpenAILanguageModelResponsesOptions,
     }
 
-    const persistStreamError = async (error: unknown) => {
+    const persistStreamError = (error: unknown) => {
       console.error('Streaming error occurred:', error)
 
-      if (mcpClients.length > 0) {
-        await closeMCPClients(mcpClients)
-        console.log(`[MCP] Closed ${mcpClients.length} MCP client(s) after error`)
-      }
+      closeMCPClientsLater(background, mcpClients)
 
       if (process.env.STREAM_ERRORS_TO_CHAT === 'true') {
-        try {
-          await saveMessage(
-            activeChat.id,
-            'assistant',
-            CLIENT_ERROR_MESSAGE,
-            [],
-            `error-${Date.now()}`
+        background.track(
+          'save stream error',
+          userMessageSaved.then(() =>
+            saveMessage(chat.id, 'assistant', CLIENT_ERROR_MESSAGE, [], `error-${Date.now()}`)
           )
-          console.debug('Streaming error saved to database')
-        } catch (saveError) {
-          console.error('Failed to save streaming error:', saveError)
-        }
+        )
       }
     }
 
@@ -629,7 +731,7 @@ export async function POST(req: Request) {
       }, 15000)
     }
 
-    const handleStreamError = async ({ error }: { error: unknown }) => {
+    const handleStreamError = ({ error }: { error: unknown }) => {
       const errorText = getErrorText(error)
       clearNoChunkLog()
       console.warn('[Chat] Stream error', {
@@ -637,7 +739,7 @@ export async function POST(req: Request) {
         modelId: effectiveModelId,
         errorText,
       })
-      await persistStreamError(error)
+      persistStreamError(error)
     }
 
     const handleStreamChunk = ({ chunk }: { chunk: { type: string } }) => {
@@ -654,104 +756,92 @@ export async function POST(req: Request) {
       }
     }
 
-    const handleStepEnd = async ({ finishReason, usage, stepNumber }: StepResult<ToolSet>) => {
-      try {
-        const usageTotals = normalizeTokenUsage(usage)
-        const { saveTokenUsage } = await import('@/lib/db')
-        await saveTokenUsage({
-          userId,
-          chatId: activeChat.id,
-          model: model.modelId,
-          stepIndex: stepNumber,
-          inputTokens: usageTotals.inputTokens,
-          outputTokens: usageTotals.outputTokens,
-          totalTokens: usageTotals.totalTokens,
-          meta: { finishReason },
-        })
-        if (finishReason === 'stop') {
-          savedFinalStepUsage = true
+    // Resolves true once the `stop` step's usage row is written; the final-usage
+    // fallback in onEnd only writes when that didn't happen (same rule as before).
+    let finalStepUsageSaved: Promise<boolean> = Promise.resolve(false)
+
+    // The SDK awaits onStepEnd before continuing the stream, so the DB write is
+    // detached instead of delaying the next step / the finish.
+    const handleStepEnd = ({ finishReason, usage, stepNumber }: StepResult<ToolSet>) => {
+      const usageTotals = normalizeTokenUsage(usage)
+      const saved = saveTokenUsage({
+        userId,
+        chatId: chat.id,
+        model: model.modelId,
+        stepIndex: stepNumber,
+        inputTokens: usageTotals.inputTokens,
+        outputTokens: usageTotals.outputTokens,
+        totalTokens: usageTotals.totalTokens,
+        meta: { finishReason },
+      }).then(
+        () => true,
+        (e: unknown) => {
+          console.warn('Failed to persist step usage:', e)
+          return false
         }
-      } catch (e) {
-        console.warn('Failed to persist step usage:', e)
+      )
+      background.track('save step usage', saved)
+      if (finishReason === 'stop') {
+        finalStepUsageSaved = saved
       }
     }
 
+    // The SDK awaits onEnd before closing the stream: only the assistant-message
+    // insert stays inline (the chat page reads it right after the stream ends);
+    // VTOP parsing (an LLM call), usage rows and MCP teardown run after the response.
     const handleEnd = async (result: StreamTextEndEvent<ToolSet>) => {
       clearNoChunkLog()
-      const allToolResults: FinishedToolResult[] = [...result.toolResults]
-      for (const step of result.steps) {
-        allToolResults.push(...step.toolResults)
-      }
-
-      const uniqueToolResults = allToolResults.filter(
-        (toolResult, index, array) =>
-          index === array.findIndex(r => r.toolCallId === toolResult.toolCallId)
-      )
-
-      if (directToolCallResult) {
-        const directCallId = directToolCallResult.toolCallId
-        const existingIndex = uniqueToolResults.findIndex(r => r.toolCallId === directCallId)
-        if (existingIndex === -1) {
-          uniqueToolResults.push(directToolCallResult)
-        } else {
-          uniqueToolResults[existingIndex] = directToolCallResult
+      const toolResultsById = new Map<string | undefined, FinishedToolResult>()
+      const collect = (toolResult: FinishedToolResult) => {
+        if (!toolResultsById.has(toolResult.toolCallId)) {
+          toolResultsById.set(toolResult.toolCallId, toolResult)
         }
       }
+      result.toolResults.forEach(collect)
+      for (const step of result.steps) step.toolResults.forEach(collect)
 
-      for (const tr of uniqueToolResults) {
+      if (directToolCallResult) {
+        // Replaces in place, or appends — same as the previous findIndex/push.
+        toolResultsById.set(directToolCallResult.toolCallId, directToolCallResult)
+      }
+      const uniqueToolResults = Array.from(toolResultsById.values())
+
+      const buildInvocations = () =>
+        sanitizeToolInvocations(
+          uniqueToolResults.map(tr => {
+            const toolOutput = getToolOutput(tr)
+            return {
+              toolCallId: tr.toolCallId || `${tr.toolName}-${Date.now()}`,
+              toolName: tr.toolName,
+              args: getToolInputPayload(tr) || {},
+              result: toolOutput || null,
+              state: inferLegacyToolState(tr, toolOutput),
+            }
+          })
+        )
+
+      const unparsedVTOPResults = uniqueToolResults.filter(tr => {
         const toolOutput = getToolOutputPayload(tr)
-        if (
+        return (
           tr.toolName === 'queryVTOP' &&
           toolOutput?.success &&
           toolOutput.data &&
           !toolOutput.parsedData
-        ) {
-          try {
-            const parsed = await parseVTOPData(
-              toolOutput,
-              readString(getToolInputPayload(tr), 'command') || 'data',
-              recentUserContext(messages),
-              userId
-            )
-            Object.assign(toolOutput, {
-              parsedData: parsed,
-              formatted_content: parsed.formatted_content,
-              structured_data: parsed.structured_data,
-              summary: parsed.summary,
-            })
-          } catch (e) {
-            console.error('Failed to parse VTOP data in final result:', e)
-          }
-        }
-      }
-
-      const allInvocations = uniqueToolResults.map(tr => {
-        const toolOutput = getToolOutput(tr)
-        return {
-          toolCallId: tr.toolCallId || `${tr.toolName}-${Date.now()}`,
-          toolName: tr.toolName,
-          args: getToolInputPayload(tr) || {},
-          result: toolOutput || null,
-          state: inferLegacyToolState(tr, toolOutput),
-        }
+        )
       })
 
-      const safeInvocations = sanitizeToolInvocations(allInvocations)
-
+      const messageId = result.response.id
+      let savedWithInvocations = false
+      await userMessageSaved
       try {
-        await saveMessage(
-          activeChat.id,
-          'assistant',
-          result.text,
-          safeInvocations,
-          result.response.id
-        )
-        console.debug('Final message saved with tool invocations')
+        await saveMessage(chat.id, 'assistant', result.text, buildInvocations(), messageId)
+        savedWithInvocations = true
+        if (chatDebug()) console.debug('Final message saved with tool invocations')
       } catch (error) {
         console.error('Failed to save final message:', error)
         try {
-          await saveMessage(activeChat.id, 'assistant', result.text, [], result.response.id)
-          console.debug('Final message saved without tool invocations (fallback)')
+          await saveMessage(chat.id, 'assistant', result.text, [], messageId)
+          if (chatDebug()) console.debug('Final message saved without tool invocations (fallback)')
         } catch (fallbackError) {
           console.error(
             'Failed to save final message even without tool invocations:',
@@ -760,32 +850,63 @@ export async function POST(req: Request) {
         }
       }
 
-      try {
-        if (!savedFinalStepUsage) {
-          const usageTotals = normalizeTokenUsage(result.usage)
-          const { saveTokenUsage } = await import('@/lib/db')
-          await saveTokenUsage({
-            userId,
-            chatId: activeChat.id,
-            model: model.modelId,
-            stepIndex: null,
-            inputTokens: usageTotals.inputTokens,
-            outputTokens: usageTotals.outputTokens,
-            totalTokens: usageTotals.totalTokens,
-            meta: { type: 'final' },
-          })
-        }
-      } catch (e) {
-        console.warn('Failed to persist final usage:', e)
+      if (unparsedVTOPResults.length > 0) {
+        background.track(
+          'parse VTOP results',
+          (async () => {
+            for (const tr of unparsedVTOPResults) {
+              const toolOutput = getToolOutputPayload(tr)
+              if (!toolOutput) continue
+              try {
+                const parsed = await parseVTOPData(
+                  toolOutput,
+                  readString(getToolInputPayload(tr), 'command') || 'data',
+                  recentUserContext(messages),
+                  userId
+                )
+                Object.assign(toolOutput, {
+                  parsedData: parsed,
+                  formatted_content: parsed.formatted_content,
+                  structured_data: parsed.structured_data,
+                  summary: parsed.summary,
+                })
+              } catch (e) {
+                console.error('Failed to parse VTOP data in final result:', e)
+              }
+            }
+            if (savedWithInvocations) {
+              await updateMessageToolInvocations(messageId, buildInvocations())
+            }
+          })()
+        )
       }
 
-      if (mcpClients.length > 0) {
-        await closeMCPClients(mcpClients)
-        console.log(`[MCP] Closed ${mcpClients.length} MCP client(s)`)
-      }
+      const usageTotals = normalizeTokenUsage(result.usage)
+      background.track(
+        'save final usage',
+        finalStepUsageSaved.then(async savedStopStep => {
+          if (savedStopStep) return
+          try {
+            await saveTokenUsage({
+              userId,
+              chatId: chat.id,
+              model: model.modelId,
+              stepIndex: null,
+              inputTokens: usageTotals.inputTokens,
+              outputTokens: usageTotals.outputTokens,
+              totalTokens: usageTotals.totalTokens,
+              meta: { type: 'final' },
+            })
+          } catch (e) {
+            console.warn('Failed to persist final usage:', e)
+          }
+        })
+      )
+
+      closeMCPClientsLater(background, mcpClients)
     }
 
-    await enforceUserRateLimit(userId)
+    await (earlyRateLimit ?? enforceUserRateLimit(userId))
     scheduleNoChunkLog()
 
     const result = streamText({
@@ -795,7 +916,6 @@ export async function POST(req: Request) {
       tools,
       maxRetries: 0,
       maxOutputTokens: openaiMaxOutputTokens,
-      experimental_transform: smoothStream({ chunking: 'word' }),
       stopWhen: isStepCount(10),
       providerOptions,
       onChunk: handleStreamChunk,
@@ -804,15 +924,15 @@ export async function POST(req: Request) {
       onError: handleStreamError,
     })
 
-    const stream = result.toUIMessageStream<AppUIMessage>({
+    const uiStream = result.toUIMessageStream<AppUIMessage>({
       originalMessages: uiMessages,
       generateMessageId: generateId,
       messageMetadata: ({ part }) => {
         if (part.type === 'finish') {
           return {
-            chatId: activeChat.id,
-            chatPath: `/chat/${activeChat.id}`,
-            chatTitle: activeChat.title,
+            chatId: chat.id,
+            chatPath: `/chat/${chat.id}`,
+            chatTitle: chat.title,
           }
         }
         return undefined
@@ -822,11 +942,11 @@ export async function POST(req: Request) {
 
     return createUIMessageStreamResponse({
       headers: {
-        'X-Chat-Id': activeChat.id,
-        'X-Chat-Path': `/chat/${activeChat.id}`,
-        'X-Chat-Title': activeChat.title,
+        'X-Chat-Id': chat.id,
+        'X-Chat-Path': `/chat/${chat.id}`,
+        'X-Chat-Title': chat.title,
       },
-      stream,
+      stream: titleReady ? withFinalTitle(uiStream, titleReady) : uiStream,
       consumeSseStream: consumeStream,
     })
   } catch (error) {

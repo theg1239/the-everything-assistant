@@ -7,6 +7,14 @@ import { join } from 'node:path'
 import type { Writable } from 'node:stream'
 import { asSchema, type FlexibleSchema } from 'ai'
 import * as z from 'zod'
+import {
+  invalidateChatgptStatus,
+  isCodexConfigured,
+  readCachedChatgptConnected,
+  rememberChatgptConnected,
+} from './status-cache'
+
+export { invalidateChatgptStatus, isCodexConfigured } from './status-cache'
 
 /** Any non-null object (arrays included), for reading untrusted JSON-RPC/proxy payloads. */
 const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
@@ -1425,10 +1433,12 @@ class CodexAppServerSession {
       } else {
         this.lastLoginError = null
       }
+      void invalidateChatgptStatus(this.userId)
       return
     }
 
     if (method === 'account/updated') {
+      void invalidateChatgptStatus(this.userId)
       const payload = readObject(params)
       const authMode = readString(payload?.authMode)
       if (authMode === 'chatgpt' || authMode === 'chatgptAuthTokens') {
@@ -1621,24 +1631,59 @@ const getOrCreateSession = (userId: string): CodexAppServerSession => {
   return session
 }
 
+/** Write-through: every live status read refreshes the chat route's cached `connected` flag. */
+const remember = async <T extends { connected: boolean }>(
+  userId: string,
+  pending: Promise<T>
+): Promise<T> => {
+  const status = await pending
+  await rememberChatgptConnected(userId, status.connected)
+  return status
+}
+
 export async function getChatgptStatus(userId: string): Promise<ChatgptStatus> {
   const proxy = resolveProxyConfig()
   if (proxy) {
-    return proxyRequest(proxy, '/v1/chatgpt/status', { userId }, chatgptStatusSchema)
+    return remember(
+      userId,
+      proxyRequest(proxy, '/v1/chatgpt/status', { userId }, chatgptStatusSchema)
+    )
   }
 
   const session = getOrCreateSession(userId)
-  return session.getStatus()
+  return remember(userId, session.getStatus())
+}
+
+/** How long a failed lookup (no codex binary, proxy down) is remembered as "not connected". */
+const STATUS_ERROR_TTL_SECONDS = 60
+
+/**
+ * Cheap per-message check used by `/api/chat`: `false` immediately when Codex isn't
+ * configured for this deployment, otherwise the cached flag (5 min, refreshed by every
+ * live status read and invalidated on login/logout), falling back to a live lookup.
+ * Never throws; a failed live lookup counts as "not connected" for a minute.
+ */
+export async function isChatgptConnectedCached(userId: string): Promise<boolean> {
+  if (!isCodexConfigured()) return false
+  const cached = await readCachedChatgptConnected(userId)
+  if (cached !== null) return cached
+  try {
+    return (await getChatgptStatus(userId)).connected
+  } catch (error) {
+    console.warn('[codex] Unable to read ChatGPT status, falling back to API key', error)
+    await rememberChatgptConnected(userId, false, STATUS_ERROR_TTL_SECONDS)
+    return false
+  }
 }
 
 export async function startChatgptLogin(userId: string): Promise<ChatgptLoginStartResult> {
   const proxy = resolveProxyConfig()
-  if (proxy) {
-    return proxyRequest(proxy, '/v1/chatgpt/start', { userId }, chatgptLoginStartSchema)
-  }
-
-  const session = getOrCreateSession(userId)
-  return session.startChatgptLogin()
+  const result = proxy
+    ? await proxyRequest(proxy, '/v1/chatgpt/start', { userId }, chatgptLoginStartSchema)
+    : await getOrCreateSession(userId).startChatgptLogin()
+  // Login completes out of band; drop the cache so the next message re-checks.
+  await invalidateChatgptStatus(userId)
+  return result
 }
 
 export async function cancelChatgptLogin(
@@ -1647,29 +1692,37 @@ export async function cancelChatgptLogin(
 ): Promise<ChatgptStatus> {
   const proxy = resolveProxyConfig()
   if (proxy) {
-    return proxyRequest(
-      proxy,
-      '/v1/chatgpt/cancel',
-      {
-        userId,
-        loginId,
-      },
-      chatgptStatusSchema
+    return remember(
+      userId,
+      proxyRequest(
+        proxy,
+        '/v1/chatgpt/cancel',
+        {
+          userId,
+          loginId,
+        },
+        chatgptStatusSchema
+      )
     )
   }
 
   const session = getOrCreateSession(userId)
-  return session.cancelChatgptLogin(loginId)
+  return remember(userId, session.cancelChatgptLogin(loginId))
 }
 
 export async function disconnectChatgpt(userId: string): Promise<ChatgptStatus> {
+  // Drop the cache first so a failed logout can't leave a stale "connected" behind.
+  await invalidateChatgptStatus(userId)
   const proxy = resolveProxyConfig()
   if (proxy) {
-    return proxyRequest(proxy, '/v1/chatgpt/disconnect', { userId }, chatgptStatusSchema)
+    return remember(
+      userId,
+      proxyRequest(proxy, '/v1/chatgpt/disconnect', { userId }, chatgptStatusSchema)
+    )
   }
 
   const session = getOrCreateSession(userId)
-  return session.logout()
+  return remember(userId, session.logout())
 }
 
 export async function runChatgptManagedTurn(

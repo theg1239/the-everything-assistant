@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { getRedis } from '@/lib/redis'
 
 const menuItemSchema = z.object({
   type: z.number(),
@@ -72,7 +73,54 @@ const MEAL_TYPES: Partial<Record<number, string>> = {
   4: 'Dinner',
 }
 
+/** The upstream menus change at most daily; one hour keeps "today" correct while sparing the fetch. */
+const MENU_CACHE_TTL_SECONDS = 60 * 60
+const menuMemoryCache = new Map<string, { data: MessMenuData; expiresAt: number }>()
+const menuCacheKey = (endpoint: string) => `mess-menu:v1:${endpoint}`
 
+/**
+ * Parsed menu JSON for `endpoint`: instance memory, then Redis (shared across instances),
+ * then the upstream fetch. Only valid menus are cached; errors propagate as before.
+ */
+async function loadMenuData(
+  endpoint: string,
+  init: { headers: Record<string, string>; timeoutMs: number }
+): Promise<MessMenuData | null> {
+  const now = Date.now()
+  const memo = menuMemoryCache.get(endpoint)
+  if (memo && memo.expiresAt > now) return memo.data
+
+  const redis = getRedis()
+  if (redis) {
+    try {
+      const cached = parseMessMenuData(await redis.get(menuCacheKey(endpoint)))
+      if (cached) {
+        menuMemoryCache.set(endpoint, { data: cached, expiresAt: now + MENU_CACHE_TTL_SECONDS * 1000 })
+        return cached
+      }
+    } catch (error) {
+      console.warn('[mess-menu] cache read failed', error)
+    }
+  }
+
+  const response = await fetch(endpoint, {
+    headers: init.headers,
+    signal: AbortSignal.timeout(init.timeoutMs),
+  })
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+  }
+  const data = parseMessMenuData(await response.json())
+  if (data) {
+    menuMemoryCache.set(endpoint, { data, expiresAt: Date.now() + MENU_CACHE_TTL_SECONDS * 1000 })
+    if (redis) {
+      redis
+        .set(menuCacheKey(endpoint), data, { ex: MENU_CACHE_TTL_SECONDS })
+        .catch((error: unknown) => console.warn('[mess-menu] cache write failed', error))
+    }
+  }
+  return data
+}
 
 export async function getMessMenu(
   hostelType?: 'mens' | 'ladies',
@@ -91,22 +139,14 @@ export async function getMessMenu(
       throw new Error(`Invalid hostel/mess combination: ${selectedHostel}-${selectedMess}`)
     }
 
-    console.log(`Fetching menu from ${selectedHostel} hostel, ${selectedMess} mess...`)
-
-    const response = await fetch(endpoint, {
+    const menuData = await loadMenuData(endpoint, {
       headers: {
         Accept: 'application/json',
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
       },
-      signal: AbortSignal.timeout(10000),
+      timeoutMs: 10000,
     })
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-    }
-
-    const menuData = parseMessMenuData(await response.json())
 
     if (!menuData) {
       throw new Error('Invalid menu data structure received')
@@ -275,14 +315,10 @@ export async function getAvailableDateRange(
 
     if (!endpoint) return null
 
-    const response = await fetch(endpoint, {
+    const menuData = await loadMenuData(endpoint, {
       headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(5000),
+      timeoutMs: 5000,
     })
-
-    if (!response.ok) return null
-
-    const menuData = parseMessMenuData(await response.json())
     const dates = (menuData?.menu ?? []).map(day => day.date).sort()
     const start = dates[0]
     const end = dates[dates.length - 1]

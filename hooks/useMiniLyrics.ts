@@ -22,71 +22,88 @@ const parseLrc = (lrcText: string): MiniLyricLine[] => {
     .filter((v): v is MiniLyricLine => Boolean(v && v.words))
 }
 
-export function useMiniLyrics(track: Track | null, currentTimeMs: number) {
+/** Index of the lyric line active at `timeMs` (lines are sorted by start time), or -1. */
+export function getCurrentLyricLineIndex(lines: MiniLyricLine[], timeMs: number): number {
+  let idx = -1
+  for (const [i, line] of lines.entries()) {
+    if (timeMs >= line.startTimeMs) {
+      idx = i
+    } else {
+      break
+    }
+  }
+  return idx
+}
+
+interface LyricsFetchResult {
+  lines: MiniLyricLine[]
+  error: string | null
+}
+
+async function fetchLyricLines(track: Track): Promise<LyricsFetchResult> {
+  try {
+    const res = await fetch('/api/lyrics', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: track.title,
+        artist: track.artist ?? '',
+        album: track.album ?? '',
+      }),
+    })
+    if (!res.ok) {
+      throw new Error('Lyrics unavailable')
+    }
+    const json: unknown = await res.json().catch(() => null)
+    const lyricsText = isRecord(json) && typeof json.lyrics === 'string' ? json.lyrics : ''
+    return { lines: parseLrc(lyricsText), error: null }
+  } catch (err) {
+    return { lines: [], error: errorMessage(err) || 'Lyrics unavailable' }
+  }
+}
+
+/** Fetches and parses the lyrics for `track` (time-independent part of {@link useMiniLyrics}). */
+export function useMiniLyricLines(track: Track | null) {
   const [lines, setLines] = useState<MiniLyricLine[]>([])
-  const [currentLine, setCurrentLine] = useState(-1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [refreshNonce, setRefreshNonce] = useState(0)
 
-  const lyricOffset = track?.lyricOffset ?? 0
-
   const fetchLyrics = useCallback(async () => {
     if (!track) {
       setLines([])
-      setCurrentLine(-1)
       setError(null)
       return
     }
     setLoading(true)
     setError(null)
-    try {
-      const res = await fetch('/api/lyrics', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: track.title,
-          artist: track.artist ?? '',
-          album: track.album ?? '',
-        }),
-      })
-      if (!res.ok) {
-        throw new Error('Lyrics unavailable')
-      }
-      const json: unknown = await res.json().catch(() => null)
-      const lyricsText = isRecord(json) && typeof json.lyrics === 'string' ? json.lyrics : ''
-      const parsed = parseLrc(lyricsText)
-      setLines(parsed)
-    } catch (err) {
-      setLines([])
-      setError(errorMessage(err) || 'Lyrics unavailable')
-    } finally {
-      setLoading(false)
-    }
+    const result = await fetchLyricLines(track)
+    setLines(result.lines)
+    if (result.error) setError(result.error)
+    setLoading(false)
   }, [track])
 
   useEffect(() => {
     fetchLyrics()
   }, [fetchLyrics, refreshNonce])
 
-  useEffect(() => {
-    if (!lines.length) {
-      setCurrentLine(-1)
-      return
-    }
-    const t = currentTimeMs + lyricOffset
-    let idx = -1
-    for (const [i, line] of lines.entries()) {
-      if (t >= line.startTimeMs) {
-        idx = i
-      } else {
-        break
-      }
-    }
-    setCurrentLine(idx)
-  }, [currentTimeMs, lines, lyricOffset])
-
   const refresh = useCallback(() => setRefreshNonce((n) => n + 1), [])
+
+  return useMemo(
+    () => ({
+      lines,
+      loading,
+      error,
+      refresh,
+    }),
+    [lines, loading, error, refresh]
+  )
+}
+
+export function useMiniLyrics(track: Track | null, currentTimeMs: number) {
+  const { lines, loading, error, refresh } = useMiniLyricLines(track)
+  const lyricOffset = track?.lyricOffset ?? 0
+  const currentLine = lines.length ? getCurrentLyricLineIndex(lines, currentTimeMs + lyricOffset) : -1
 
   return useMemo(
     () => ({

@@ -1,5 +1,4 @@
 import { memo } from 'react'
-import { AnimatePresence } from 'framer-motion'
 import { MessageBubble, type MaximizedItem } from '@/components/message-bubble'
 import type { LegacyMessage } from '@/lib/ai-message-conversion'
 import { FollowUpSuggestions } from '@/components/follow-up-suggestions'
@@ -49,10 +48,21 @@ export const VirtualizedMessages = memo(
       -1
     )
 
+    // Key by id so bubbles keep their identity when the 50-message window slides (an index in the
+    // key remounted every bubble); a repeated id falls back to id+index to stay unique.
+    const seenIds = new Set<string>()
+    const keys = visibleMessages.map((message, idx) => {
+      const key = seenIds.has(message.id) ? `${message.id}-${idx}` : message.id
+      seenIds.add(message.id)
+      return key
+    })
+
+    // No AnimatePresence: bubbles have no exit animation, and popLayout measured every child on
+    // each update. MessageBubble's own mount animation still plays for newly added messages.
     return (
-      <AnimatePresence mode="popLayout">
+      <>
         {visibleMessages.map((message, idx) => (
-          <div key={`${message.id}-${idx}`}>
+          <div key={keys[idx]}>
             <MessageBubble
               message={message}
               chatId={chatId}
@@ -86,7 +96,7 @@ export const VirtualizedMessages = memo(
               )}
           </div>
         ))}
-      </AnimatePresence>
+      </>
     )
   }
 )

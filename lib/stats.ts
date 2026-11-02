@@ -1,5 +1,4 @@
 import { prisma } from '@/lib/prisma'
-import { Prisma } from '@/prisma/generated/client'
 import * as z from 'zod'
 
 /** Raw SQL aggregates come back as number / bigint / Decimal / string depending on the driver. */
@@ -259,18 +258,12 @@ export async function getMovingAverages(windowDays = 7): Promise<MovingAvg[]> {
   }
 }
 
-export async function getToolCallStats() {
-  const messagesWithTools = await prisma.message.findMany({
-    where: {
-      tool_invocations: {
-        not: Prisma.JsonNull,
-      },
-    },
-    select: {
-      tool_invocations: true,
-    },
-  })
-}
+/**
+ * Placeholder: per-tool aggregation isn't implemented, so this resolves to `undefined`
+ * (the dashboard renders nothing). It used to read every message's `tool_invocations`
+ * JSON and discard it — a full scan on each stats load with no output.
+ */
+export async function getToolCallStats(): Promise<void> {}
 
 export async function getDetailedUsageStats() {
   const [lifetimeBuckets, hourlyHeatmap, dailyPeaks, topModels, tokensPerUser, movingAverages] =

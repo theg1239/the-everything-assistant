@@ -39,26 +39,33 @@ export const usePdfDock = () => {
 export const PdfDockProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const STORAGE_KEY = 'pdf-dock-items-v1'
 
-  const [items, setItems] = useState<PdfItem[]>(() => {
-    try {
-      if (typeof window === 'undefined') return []
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (!raw) return []
-      const parsed: unknown = JSON.parse(raw)
-      return Array.isArray(parsed) ? parsed.filter(isPdfItem) : []
-    } catch (e) {
-      console.warn('Failed to read pdf dock from localStorage', e)
-      return []
-    }
-  })
+  // Start empty on both server and client so hydration matches, then restore
+  // the persisted dock after mount (and only persist once restored).
+  const [items, setItems] = useState<PdfItem[]>([])
+  const [restored, setRestored] = useState(false)
 
   useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      const parsed: unknown = raw ? JSON.parse(raw) : []
+      const saved = Array.isArray(parsed) ? parsed.filter(isPdfItem) : []
+      if (saved.length > 0) {
+        setItems(prev => (prev.length > 0 ? prev : saved))
+      }
+    } catch (e) {
+      console.warn('Failed to read pdf dock from localStorage', e)
+    }
+    setRestored(true)
+  }, [])
+
+  useEffect(() => {
+    if (!restored) return
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
     } catch (e) {
       console.warn('Failed to save pdf dock to localStorage', e)
     }
-  }, [items])
+  }, [items, restored])
 
   const addPdf = (item: Omit<PdfItem, 'isOpen'>) => {
     setItems(prev => {

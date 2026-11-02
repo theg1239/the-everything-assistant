@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { NextAuthOptions } from 'next-auth'
 import { getServerSession } from 'next-auth/next'
 import GoogleProvider from 'next-auth/providers/google'
@@ -62,12 +63,22 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = user.id
 
-        const userData = await prisma.user.findUnique({
-          where: { id: user.id },
-          select: { mfaEnabled: true },
-        })
+        // The Prisma adapter loads the full user row with the session, so the MFA
+        // flag is normally already here; only query if it is missing.
+        const inlineMfaEnabled =
+          'mfaEnabled' in user && typeof user.mfaEnabled === 'boolean'
+            ? user.mfaEnabled
+            : undefined
+        const mfaEnabled =
+          inlineMfaEnabled ??
+          (
+            await prisma.user.findUnique({
+              where: { id: user.id },
+              select: { mfaEnabled: true },
+            })
+          )?.mfaEnabled
 
-        session.requiresMFA = userData?.mfaEnabled || false
+        session.requiresMFA = mfaEnabled || false
       }
       return session
     },
@@ -77,4 +88,9 @@ export const authOptions: NextAuthOptions = {
   },
 }
 
-export const auth = () => getServerSession(authOptions)
+/**
+ * Current session. Memoised per request in Server Components / layouts via
+ * React `cache`, so the layout, page and loaders share one lookup. Prefer this
+ * over calling `getServerSession(authOptions)` directly.
+ */
+export const auth = cache(() => getServerSession(authOptions))

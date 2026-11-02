@@ -133,6 +133,28 @@ export function uiMessagesToLegacyMessages(messages: AppUIMessage[]): LegacyMess
   return messages.map(uiMessageToLegacyMessage)
 }
 
+/** Like `uiMessagesToLegacyMessages`, but unchanged UI messages map to the same legacy objects. */
+export function cachedUiMessagesToLegacyMessages(messages: AppUIMessage[]): LegacyMessage[] {
+  return messages.map(cachedUiMessageToLegacyMessage)
+}
+
+/**
+ * Conversions keyed by UI message identity. `useChat` keeps the object identity of unchanged
+ * messages (only the streaming message is replaced by a fresh snapshot each update), so repeated
+ * conversions return the same legacy object and memoized consumers skip unchanged messages.
+ * Callers must treat both the UI messages and the returned legacy messages as immutable.
+ */
+const legacyMessageCache = new WeakMap<AppUIMessage, LegacyMessage>()
+
+/** Memoized `uiMessageToLegacyMessage`: the same UI message object yields the same legacy object. */
+export function cachedUiMessageToLegacyMessage(message: AppUIMessage): LegacyMessage {
+  const cached = legacyMessageCache.get(message)
+  if (cached) return cached
+  const legacy = uiMessageToLegacyMessage(message)
+  legacyMessageCache.set(message, legacy)
+  return legacy
+}
+
 export function uiMessageToLegacyMessage(message: AppUIMessage): LegacyMessage {
   const legacy: LegacyMessage = {
     id: message.id || generateId(),

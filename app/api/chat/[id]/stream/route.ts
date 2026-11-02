@@ -1,6 +1,5 @@
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { getChat, getMessages } from '@/lib/db'
+import { auth } from '@/lib/auth'
+import { getChat, getLatestMessage } from '@/lib/db'
 import { createUIMessageStream, JsonToSseTransformStream } from 'ai'
 import type { UIMessage } from 'ai'
 import {
@@ -8,7 +7,6 @@ import {
   type AppUIMessage,
   type LegacyMessage,
 } from '@/lib/ai-message-conversion'
-import type { Message as DbMessage } from '@/lib/db'
 
 interface StreamRouteParams {
   id: string
@@ -33,23 +31,25 @@ function emptyStream() {
  * part so the UI can pick up where it left off.
  */
 export async function GET(_req: Request, { params }: { params: Promise<StreamRouteParams> }) {
-  const session = await getServerSession(authOptions)
+  const [session, { id: chatId }] = await Promise.all([auth(), params])
   if (!session?.user?.id) {
     return new Response('Unauthorized', { status: 401 })
   }
 
-  const { id: chatId } = await params
   if (!chatId) {
     return new Response('Bad Request', { status: 400 })
   }
 
-  const chat = await getChat(chatId, session.user.id)
+  // Ownership check and the newest message are independent reads; the message is only
+  // used once `getChat` confirms the chat belongs to the user. Previously this loaded
+  // the whole history just to look at its last row.
+  const [chat, mostRecent] = await Promise.all([
+    getChat(chatId, session.user.id),
+    getLatestMessage(chatId).catch(() => null),
+  ])
   if (!chat) {
     return emptyStream()
   }
-
-  const dbMessages = await getMessages(chatId).catch((): DbMessage[] => [])
-  const mostRecent = dbMessages.at(-1)
 
   if (!mostRecent || mostRecent.role !== 'assistant') {
     return emptyStream()

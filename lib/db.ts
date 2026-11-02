@@ -365,18 +365,6 @@ export async function deleteAllChats(userId: string): Promise<number> {
   return result.count
 }
 
-export async function archiveChat(id: string, userId: string): Promise<void> {
-  await prisma.chat.updateMany({
-    where: {
-      id,
-      userId,
-    },
-    data: {
-      archived: true,
-    },
-  })
-}
-
 export async function archiveAllChats(userId: string): Promise<number> {
   const result = await prisma.chat.updateMany({
     where: {
@@ -399,8 +387,10 @@ export async function saveTokenUsage(params: {
   outputTokens: number
   totalTokens: number
   meta?: Prisma.InputJsonValue
-}): Promise<TokenUsageLog> {
-  const rec = await prisma.tokenUsage.create({
+}): Promise<void> {
+  // Insert-only (several per chat turn): don't read the row back.
+  await prisma.tokenUsage.create({
+    select: { id: true },
     data: {
       userId: params.userId || null,
       chatId: params.chatId || null,
@@ -412,7 +402,6 @@ export async function saveTokenUsage(params: {
       meta: params.meta,
     },
   })
-  return rec
 }
 
 export async function getRecentTokenUsage(limit: number = 50): Promise<TokenUsageLog[]> {
@@ -611,21 +600,45 @@ export async function restoreChat(id: string, userId: string): Promise<void> {
   })
 }
 
-export async function getMessages(chatId: string): Promise<Message[]> {
+const messageSelect = {
+  id: true,
+  chatId: true,
+  role: true,
+  content: true,
+  tool_invocations: true,
+  attachments: true,
+  created_at: true,
+} as const
+
+export type GetMessagesOptions = {
+  /**
+   * Only the most recent `limit` messages (still returned oldest-first). Uses the
+   * `(chatId, created_at)` index; omit for the full history.
+   */
+  limit?: number
+}
+
+export async function getMessages(
+  chatId: string,
+  options: GetMessagesOptions = {}
+): Promise<Message[]> {
   try {
-    const messages = await prisma.message.findMany({
-      where: { chatId },
-      orderBy: { created_at: 'asc' },
-      select: {
-        id: true,
-        chatId: true,
-        role: true,
-        content: true,
-        tool_invocations: true,
-        attachments: true,
-        created_at: true,
-      },
-    })
+    const { limit } = options
+    const messages =
+      limit !== undefined && limit > 0
+        ? (
+            await prisma.message.findMany({
+              where: { chatId },
+              orderBy: { created_at: 'desc' },
+              take: limit,
+              select: messageSelect,
+            })
+          ).reverse()
+        : await prisma.message.findMany({
+            where: { chatId },
+            orderBy: { created_at: 'asc' },
+            select: messageSelect,
+          })
     return messages.map(msg => ({
       ...msg,
       role: toMessageRole(msg.role),
@@ -645,9 +658,10 @@ export async function saveMessage(
   toolInvocations?: unknown,
   messageId?: string,
   attachments?: Attachment[]
-): Promise<Message> {
+): Promise<Pick<Message, 'id' | 'created_at'>> {
   const safeToolInvocations = toToolInvocationsJson(toolInvocations)
-  const message = await prisma.message.create({
+  // Callers already hold the content/tool invocations; don't ship them back from the DB.
+  return prisma.message.create({
     data: {
       id: messageId,
       chatId,
@@ -656,22 +670,37 @@ export async function saveMessage(
       tool_invocations: safeToolInvocations,
       attachments,
     },
-    select: {
-      id: true,
-      chatId: true,
-      role: true,
-      content: true,
-      tool_invocations: true,
-      attachments: true,
-      created_at: true,
-    },
+    select: { id: true, created_at: true },
   })
-  return {
-    ...message,
-    role: toMessageRole(message.role),
-    toolInvocations: readToolInvocations(message.tool_invocations),
-    attachments: readAttachments(message.attachments),
-  }
+}
+
+/** Replaces a saved message's tool invocations (used to attach post-processed tool output). */
+export async function updateMessageToolInvocations(
+  messageId: string,
+  toolInvocations: unknown
+): Promise<void> {
+  await prisma.message.update({
+    where: { id: messageId },
+    data: { tool_invocations: toToolInvocationsJson(toolInvocations) },
+    select: { id: true },
+  })
+}
+
+/** The newest message of a chat (any role), or null. Single indexed row read. */
+export async function getLatestMessage(chatId: string): Promise<Message | null> {
+  const message = await prisma.message.findFirst({
+    where: { chatId },
+    orderBy: { created_at: 'desc' },
+    select: messageSelect,
+  })
+  return message
+    ? {
+        ...message,
+        role: toMessageRole(message.role),
+        toolInvocations: readToolInvocations(message.tool_invocations),
+        attachments: readAttachments(message.attachments),
+      }
+    : null
 }
 
 export async function createChatFromMessages(
@@ -796,35 +825,6 @@ export async function updateCanvasDocument(
   })
 }
 
-export async function deleteCanvasDocument(id: string): Promise<void> {
-  await prisma.canvasDocument.delete({
-    where: { id },
-    select: { id: true },
-  })
-}
-
-export async function getVote(chatId: string, messageId: string): Promise<Vote | null> {
-  try {
-    const vote = await prisma.vote.findUnique({
-      where: {
-        chatId_messageId: {
-          chatId,
-          messageId,
-        },
-      },
-      select: {
-        chatId: true,
-        messageId: true,
-        is_upvoted: true,
-      },
-    })
-    return vote
-  } catch (error) {
-    console.error('Error getting vote:', error)
-    return null
-  }
-}
-
 type VoteMessageMetadata = {
   content?: string
   role?: string
@@ -887,89 +887,6 @@ export async function deleteAllArchivedChats(userId: string): Promise<number> {
   return result.count
 }
 
-export async function createStreamId(streamId: string, chatId: string): Promise<void> {
-  await prisma.streamId.create({
-    data: {
-      streamId,
-      chatId,
-    },
-    select: { id: true },
-  })
-}
-
-export async function getStreamIdsByChatId(chatId: string): Promise<string[]> {
-  const streamIds = await prisma.streamId.findMany({
-    where: { chatId },
-    orderBy: { createdAt: 'asc' },
-    select: { streamId: true },
-  })
-
-  return streamIds.map(s => s.streamId)
-}
-
-export async function getMostRecentStreamId(chatId: string): Promise<string | null> {
-  const streamId = await prisma.streamId.findFirst({
-    where: { chatId },
-    orderBy: { createdAt: 'desc' },
-    select: { streamId: true },
-  })
-  return streamId?.streamId || null
-}
-
-export async function getLastAssistantMessage(
-  chatId: string
-): Promise<Omit<Message, 'attachments'> | null> {
-  const message = await prisma.message.findFirst({
-    where: {
-      chatId,
-      role: 'assistant',
-    },
-    orderBy: { created_at: 'desc' },
-    select: {
-      id: true,
-      chatId: true,
-      role: true,
-      content: true,
-      tool_invocations: true,
-      created_at: true,
-    },
-  })
-
-  return message
-    ? {
-        ...message,
-        role: toMessageRole(message.role),
-        toolInvocations: readToolInvocations(message.tool_invocations),
-      }
-    : null
-}
-
-export async function deleteStreamIdsByChatId(chatId: string): Promise<void> {
-  await prisma.streamId.deleteMany({
-    where: { chatId },
-  })
-}
-
-export async function getMessageCountByUserId(
-  userId: string,
-  differenceInHours: number = 24
-): Promise<number> {
-  const timeThreshold = new Date(Date.now() - differenceInHours * 60 * 60 * 1000)
-
-  const count = await prisma.message.count({
-    where: {
-      chat: {
-        userId,
-      },
-      created_at: {
-        gte: timeThreshold,
-      },
-    },
-  })
-
-  return count
-}
-
 export async function getChatsWithMessageCounts(
   userId: string,
   limit: number = 15,
@@ -1006,48 +923,5 @@ export async function getChatsWithMessageCounts(
     updated_at: chat.updated_at,
     path: chat.path,
     messageCount: chat._count.messages,
-  }))
-}
-
-export async function batchUpdateChatTimestamps(chatIds: string[]): Promise<void> {
-  await prisma.chat.updateMany({
-    where: {
-      id: {
-        in: chatIds,
-      },
-    },
-    data: {
-      updated_at: new Date(),
-    },
-  })
-}
-
-export async function getRecentMessagesForUser(
-  userId: string,
-  limit: number = 50
-): Promise<Message[]> {
-  const messages = await prisma.message.findMany({
-    where: {
-      chat: {
-        userId,
-        archived: false,
-      },
-    },
-    orderBy: { created_at: 'desc' },
-    take: limit,
-    select: {
-      id: true,
-      chatId: true,
-      role: true,
-      content: true,
-      tool_invocations: true,
-      created_at: true,
-    },
-  })
-
-  return messages.map(msg => ({
-    ...msg,
-    role: toMessageRole(msg.role),
-    toolInvocations: readToolInvocations(msg.tool_invocations),
   }))
 }

@@ -44,7 +44,7 @@ export function PWAInstallDialog() {
         </button>
         <div className="relative h-24 sm:h-32 overflow-hidden">
           <Image
-            src="/onboarding-artwork/artwork.png"
+            src="/onboarding-artwork/artwork.webp"
             alt="Install App artwork"
             fill
             className="object-cover object-center"

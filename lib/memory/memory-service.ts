@@ -176,6 +176,31 @@ export class MemoryService {
     return result
   }
 
+  /**
+   * Hot-path read for the chat routes: only the flag, no default-row upsert.
+   * A missing settings row means the schema default (`isEnabled: true`).
+   */
+  async isMemoryEnabled(userId: string): Promise<boolean> {
+    const settings = await prisma.memorySettings.findUnique({
+      where: { userId },
+      select: { isEnabled: true },
+    })
+    return settings?.isEnabled ?? true
+  }
+
+  /** Memories for the system prompt, same order as `getUserMemories`, only the used columns. */
+  async getMemoriesForPrompt(
+    userId: string,
+    limit: number
+  ): Promise<Array<{ content: string; updatedAt: Date }>> {
+    return prisma.memory.findMany({
+      where: { userId },
+      orderBy: [{ importance: 'desc' }, { lastUsedAt: 'desc' }],
+      take: limit,
+      select: { content: true, updatedAt: true },
+    })
+  }
+
   async getUserMemorySettings(userId: string): Promise<MemorySettings | null> {
     let settings = await prisma.memorySettings.findUnique({
       where: { userId },

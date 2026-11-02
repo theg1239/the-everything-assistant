@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { SIDEBAR_OPEN_COOKIE } from '@/contexts/sidebar-cookie'
 
 interface Chat {
   id: string
@@ -24,25 +25,38 @@ interface SidebarContextType {
 
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined)
 
-export function SidebarProvider({ children }: { children: React.ReactNode }) {
-  const [isOpen, setIsOpenState] = useState(() => {
-    if (typeof window === 'undefined') return false
-    const saved = localStorage.getItem('sidebarOpen')
-    return saved !== null ? saved === 'true' : false
-  })
+const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
+
+/**
+ * `initialOpen` comes from the `sidebarOpen` cookie (read by the root layout), so
+ * the server render and hydration agree. `undefined` = no cookie yet: fall back
+ * to the legacy localStorage value after mount.
+ */
+export function SidebarProvider({
+  children,
+  initialOpen,
+}: {
+  children: React.ReactNode
+  initialOpen?: boolean
+}) {
+  const [isOpen, setIsOpenState] = useState(initialOpen ?? false)
   const [pdfOpen, setPdfOpen] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
   const [chats, setChats] = useState<Chat[]>([])
   const [chatsLoaded, setChatsLoaded] = useState(false)
 
   useEffect(() => {
+    if (initialOpen === undefined && localStorage.getItem(SIDEBAR_OPEN_COOKIE) === 'true') {
+      setIsOpenState(true)
+    }
     setIsInitialized(true)
-  }, [])
+  }, [initialOpen])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    localStorage.setItem('sidebarOpen', String(isOpen))
-  }, [isOpen])
+    if (!isInitialized) return
+    localStorage.setItem(SIDEBAR_OPEN_COOKIE, String(isOpen))
+    document.cookie = `${SIDEBAR_OPEN_COOKIE}=${String(isOpen)}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}; samesite=lax`
+  }, [isOpen, isInitialized])
 
   useEffect(() => {
     if (typeof window === 'undefined') return

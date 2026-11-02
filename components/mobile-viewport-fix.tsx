@@ -67,6 +67,12 @@ export default function MobileViewportFix() {
       }
     }
 
+    let orientationTimeoutId: ReturnType<typeof setTimeout> | undefined
+    const handleOrientationChange = () => {
+      clearTimeout(orientationTimeoutId)
+      orientationTimeoutId = setTimeout(setAppHeight, 100)
+    }
+
     setAppHeight()
 
     window.addEventListener('resize', setAppHeight)
@@ -77,7 +83,7 @@ export default function MobileViewportFix() {
     }
     window.addEventListener('focusin', handleFocusIn)
     window.addEventListener('focusout', handleFocusOut)
-    window.addEventListener('orientationchange', () => setTimeout(setAppHeight, 100))
+    window.addEventListener('orientationchange', handleOrientationChange)
     document.addEventListener('touchmove', preventOverscroll, { passive: false })
 
     return () => {
@@ -88,6 +94,8 @@ export default function MobileViewportFix() {
       }
       window.removeEventListener('focusin', handleFocusIn)
       window.removeEventListener('focusout', handleFocusOut)
+      window.removeEventListener('orientationchange', handleOrientationChange)
+      clearTimeout(orientationTimeoutId)
       document.removeEventListener('touchmove', preventOverscroll)
     }
   }, [])

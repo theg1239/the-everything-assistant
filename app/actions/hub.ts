@@ -2,8 +2,7 @@
 
 import { generateText, Output, type LanguageModelUsage } from 'ai'
 import * as z from 'zod'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { createVITTools } from '@/lib/tools'
 import {
   getFormattedVTOPCredentials as getServerFormattedVTOPCredentials,
@@ -84,7 +83,7 @@ const HUB_CORE_COMMANDS: HubVTOPCommand[] = [
 
 const VTOP_PROXY_URL = process.env.VTOP_PROXY_URL || 'http://localhost:3001'
 async function requireUser() {
-  const session = await getServerSession(authOptions)
+  const session = await auth()
   if (!session?.user?.id) {
     throw new Error('Unauthorized')
   }

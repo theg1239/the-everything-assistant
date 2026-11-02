@@ -10,6 +10,7 @@ import { useCallback, useRef } from 'react'
 export function useChatPrefetch() {
   const router = useRouter()
   const prefetched = useRef<Set<string>>(new Set())
+  const pendingHover = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const prefetchChatRoute = useCallback(
     (chatId: string) => {
@@ -27,8 +28,18 @@ export function useChatPrefetch() {
 
   const prefetchOnHover = useCallback(
     (chatId: string) => {
-      const tid = setTimeout(() => prefetchChatRoute(chatId), 200)
-      return () => clearTimeout(tid)
+      // Only the item the pointer rests on (200ms) is prefetched: sweeping across the list
+      // cancels the pending prefetch of the previously hovered item.
+      if (pendingHover.current) clearTimeout(pendingHover.current)
+      const tid = setTimeout(() => {
+        pendingHover.current = null
+        prefetchChatRoute(chatId)
+      }, 200)
+      pendingHover.current = tid
+      return () => {
+        clearTimeout(tid)
+        if (pendingHover.current === tid) pendingHover.current = null
+      }
     },
     [prefetchChatRoute]
   )

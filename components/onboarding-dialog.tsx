@@ -46,7 +46,7 @@ const onboardingSteps: [OnboardingStep, ...OnboardingStep[]] = [
     description: 'your ai-powered agentic companion for everything vit-related.',
     icon: Sparkles,
     gradient: 'from-purple-500 to-pink-500',
-    artworkImage: '/onboarding-artwork/artwork.png',
+    artworkImage: '/onboarding-artwork/artwork.webp',
     examples: ['what can you do?', 'tell me some things about VIT', 'can I ask you anything?'],
   },
   {
@@ -56,7 +56,7 @@ const onboardingSteps: [OnboardingStep, ...OnboardingStep[]] = [
       'check marks, attendance, timetable, and download course materials - all through natural conversation.',
     icon: GraduationCap,
     gradient: 'from-blue-500 to-cyan-500',
-    artworkImage: '/onboarding-artwork/artwork2.png',
+    artworkImage: '/onboarding-artwork/artwork2.webp',
     examples: [
       'check my attendance for physics',
       'download course materials for DSA',
@@ -70,7 +70,7 @@ const onboardingSteps: [OnboardingStep, ...OnboardingStep[]] = [
       'search across all vit paper repositories instantly. no more hunting through multiple websites. search by exam type, year.',
     icon: FileSearch,
     gradient: 'from-green-500 to-teal-500',
-    artworkImage: '/onboarding-artwork/artwork3.png',
+    artworkImage: '/onboarding-artwork/artwork3.webp',
     examples: [
       'find cat1 papers for database systems',
       'calculus fat papers',
@@ -84,7 +84,7 @@ const onboardingSteps: [OnboardingStep, ...OnboardingStep[]] = [
       'get mess menus, search the r/Vit subreddit and more subreddits, academic calendar & holidays, exam dates - everything.',
     icon: UtensilsCrossed,
     gradient: 'from-orange-500 to-red-500',
-    artworkImage: '/onboarding-artwork/artwork4.png',
+    artworkImage: '/onboarding-artwork/artwork4.webp',
     examples: [
       'what does reddit think about placements?',
       'is there a holiday next week?',
@@ -98,7 +98,7 @@ const onboardingSteps: [OnboardingStep, ...OnboardingStep[]] = [
       'your credentials are never stored. all sessions are encrypted and temporary - just like logging in yourself.',
     icon: Shield,
     gradient: 'from-indigo-500 to-purple-500',
-    artworkImage: '/onboarding-artwork/artwork5.png',
+    artworkImage: '/onboarding-artwork/artwork5.webp',
     examples: [
       'how secure are you?',
       'what are your security measures?',
@@ -112,7 +112,7 @@ const onboardingSteps: [OnboardingStep, ...OnboardingStep[]] = [
       'search for faculty members, ask about when holidays or events are happening, and more.',
     icon: Zap,
     gradient: 'from-yellow-500 to-amber-500',
-    artworkImage: '/onboarding-artwork/artwork2.png',
+    artworkImage: '/onboarding-artwork/artwork2.webp',
     examples: [
       'show me the faculty members in cse',
       'when is the winter vacation?',
@@ -126,7 +126,7 @@ const onboardingSteps: [OnboardingStep, ...OnboardingStep[]] = [
       'your smart assistant is ready to help with all your vit needs. start chatting to experience the magic.',
     icon: Star,
     gradient: 'from-emerald-500 to-blue-500',
-    artworkImage: '/onboarding-artwork/artwork6.png',
+    artworkImage: '/onboarding-artwork/artwork6.webp',
     examples: null,
     isLastStep: true,
   },

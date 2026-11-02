@@ -21,7 +21,7 @@ export interface Playlist {
 
 type LibraryState = 'uninitialized' | 'loaded' | 'cleared'
 
-interface MiniPlayerState {
+export interface MiniPlayerState {
   enabled: boolean
   tracks: Track[]
   playlists: Playlist[]
@@ -62,13 +62,6 @@ interface MiniPlayerState {
   selectPlaylist: (id: string | null) => void
   addTrackToPlaylist: (trackId: string, playlistId: string) => void
   removeTrackFromPlaylist: (trackId: string, playlistId: string) => void
-}
-
-const storeLog = (...args: unknown[]) => {
-  if (typeof console !== 'undefined') {
-    // eslint-disable-next-line no-console
-    console.debug('[MiniStore]', ...args)
-  }
 }
 
 const extractVideoId = (input: string): string | null => {
@@ -227,10 +220,8 @@ export const useMiniPlayerStore = create<MiniPlayerState>()(
         const state = get()
         if (state.initializing) return
         if (state.tracks.length === 0) {
-          storeLog('initializeLibrary -> fetching defaults')
           set({ initializing: true })
           const tracks = await fetchDefaultTracks()
-          storeLog('initializeLibrary defaults loaded', tracks.length)
           set({
             tracks,
             currentIndex: tracks.length ? 0 : -1,
@@ -255,7 +246,6 @@ export const useMiniPlayerStore = create<MiniPlayerState>()(
         set((state) => {
           if (!state.tracks.length) return state
           if (state.loopCurrent) return { isPlaying: true }
-          storeLog('nextTrack', { currentIndex: state.currentIndex })
           const activeTrackIds = state.activePlaylistId
             ? state.playlists.find((p) => p.id === state.activePlaylistId)?.trackIds || []
             : null
@@ -284,7 +274,6 @@ export const useMiniPlayerStore = create<MiniPlayerState>()(
       previousTrack: () =>
         set((state) => {
           if (!state.tracks.length) return state
-          storeLog('previousTrack', { currentIndex: state.currentIndex })
           const activeTrackIds = state.activePlaylistId
             ? state.playlists.find((p) => p.id === state.activePlaylistId)?.trackIds || []
             : null
@@ -314,7 +303,6 @@ export const useMiniPlayerStore = create<MiniPlayerState>()(
       addTrackFromUrl: async (urlOrId: string) => {
         const videoId = extractVideoId(urlOrId.trim())
         if (!videoId) throw new Error('Enter a valid YouTube link or video ID')
-        storeLog('addTrackFromUrl', urlOrId, '->', videoId)
         const meta = await fetchTrackMetadata(videoId)
         const track: Track = {
           id: meta.id,
@@ -329,14 +317,12 @@ export const useMiniPlayerStore = create<MiniPlayerState>()(
           return track
         }
         set({ tracks: [track, ...existing], currentIndex: 0, isPlaying: true, progressMs: 0 })
-        storeLog('added new track', track)
         return track
       },
       playTrack: (trackId: string) => {
         set((state) => {
           const idx = state.tracks.findIndex((t) => t.id === trackId)
           if (idx === -1) return state
-          storeLog('playTrack', trackId)
           return { currentIndex: idx, isPlaying: true, progressMs: 0 }
         })
       },

@@ -3,6 +3,7 @@
 import type React from 'react'
 import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react'
 import { createPortal } from 'react-dom'
+import dynamic from 'next/dynamic'
 import { useRouter, usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
@@ -19,7 +20,6 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/utils'
-import { SettingsDialog } from '@/components/settings-dialog'
 import { useSidebar } from '@/contexts/sidebar-context'
 import { readJson } from '@/lib/http'
 import { isRecord } from '@/lib/json'
@@ -47,6 +47,36 @@ function isChat(value: unknown): value is Chat {
     typeof value.createdAt === 'string' &&
     typeof value.updatedAt === 'string'
   )
+}
+
+/** Settings is rarely opened: load its (large) chunk on demand, never during SSR. */
+const SettingsDialog = dynamic(
+  () => import('@/components/settings-dialog').then(mod => mod.SettingsDialog),
+  { ssr: false }
+)
+
+const CHATS_PAGE_SIZE = 15
+
+/** Fetches one page of the chat list; null on network/HTTP failure. */
+async function fetchChatPage(offset: number): Promise<Chat[] | null> {
+  try {
+    const response = await fetch(`/api/chats?limit=${CHATS_PAGE_SIZE}&offset=${offset}`)
+    if (!response.ok) return null
+    return await readJson<Chat[]>(response)
+  } catch (error) {
+    console.error('Error fetching chats:', error)
+    return null
+  }
+}
+
+/** Runs `callback` when the browser is idle (or after `timeout` ms); returns a canceller. */
+function scheduleIdle(callback: () => void, timeout: number): () => void {
+  if (typeof window.requestIdleCallback === 'function') {
+    const id = window.requestIdleCallback(callback, { timeout })
+    return () => window.cancelIdleCallback(id)
+  }
+  const id = window.setTimeout(callback, Math.min(timeout, 1500))
+  return () => window.clearTimeout(id)
 }
 
 const SIDEBAR_WIDTH = 280
@@ -80,7 +110,7 @@ const overlayVariants = {
 export const Sidebar = memo(
   function Sidebar(props: SidebarProps) {
     const { isOpen, onToggle } = props
-    const { isInitialized, chats, setChats, chatsLoaded, setChatsLoaded, pdfOpen } = useSidebar()
+    const { chats, setChats, chatsLoaded, setChatsLoaded, pdfOpen } = useSidebar()
 
     const hasLoadedOnceRef = useRef(chatsLoaded)
     useEffect(() => {
@@ -89,65 +119,83 @@ export const Sidebar = memo(
       }
     }, [chatsLoaded])
 
-    const [loading, setLoading] = useState(() => {
-      return !hasLoadedOnceRef.current
-    })
+    // Same as `!hasLoadedOnceRef.current` at mount (the ref is seeded from `chatsLoaded`).
+    const [loading, setLoading] = useState(() => !chatsLoaded)
     const [loadingMore, setLoadingMore] = useState(false)
     const [isLoadingMore, setIsLoadingMore] = useState(false)
     const [hasMore, setHasMore] = useState(true)
-    const [hovering, setHovering] = useState(false)
     const [selectedChatId, setSelectedChatId] = useState<string | null>(null)
-    const [scrollPosition, setScrollPosition] = useState(0)
     const [settingsOpen, setSettingsOpen] = useState(false)
+    // Mount the lazily-loaded settings dialog on first open, then keep it so its close animation plays.
+    const [settingsMounted, setSettingsMounted] = useState(false)
+    const [settingsInitialSection, setSettingsInitialSection] = useState<string | undefined>()
     const [mounted, setMounted] = useState(false)
     const [touchStartY, setTouchStartY] = useState(0)
     const [touchStartScrollTop, setTouchStartScrollTop] = useState(0)
     const [isDragging, setIsDragging] = useState(false)
 
-    const [swipeStartX, setSwipeStartX] = useState(0)
-    const [swipeStartY, setSwipeStartY] = useState(0)
-    const [isSwipeGesture, setIsSwipeGesture] = useState(false)
+    // Swipe tracking lives in refs: every touch anywhere on the page used to set state here,
+    // re-rendering the sidebar and re-subscribing these document listeners.
+    const swipeStartRef = useRef({ x: 0, y: 0 })
+    const isSwipeGestureRef = useRef(false)
     const [showSwipeHint, setShowSwipeHint] = useState(false)
     const router = useRouter()
     const pathname = usePathname()
     const { data: session } = useSession()
-    const { prefetchOnHover, prefetchOnFocus, prefetchChats } = useChatPrefetch()
+    const { prefetchOnHover, prefetchOnFocus } = useChatPrefetch()
 
     useEffect(() => {
       setMounted(true)
+    }, [])
 
+    // `openSettings` (section: feedback) is handled by SettingsDialog itself once mounted; before
+    // its lazy chunk is mounted, open it here on the requested section.
+    useEffect(() => {
+      if (settingsMounted) return
+      const handleOpenSettings = (event: Event) => {
+        if (!(event instanceof CustomEvent)) return
+        const detail: unknown = event.detail
+        if (!isRecord(detail) || detail.section !== 'feedback') return
+        setSettingsInitialSection('feedback')
+        setSettingsMounted(true)
+        setSettingsOpen(true)
+      }
+      window.addEventListener('openSettings', handleOpenSettings)
+      return () => window.removeEventListener('openSettings', handleOpenSettings)
+    }, [settingsMounted])
+
+    useEffect(() => {
       const handleGlobalTouchStart = (e: TouchEvent) => {
         const touch = e.touches[0]
         if (!touch) return
-        setSwipeStartX(touch.clientX)
-        setSwipeStartY(touch.clientY)
+        swipeStartRef.current = { x: touch.clientX, y: touch.clientY }
 
         if (touch.clientX < 20 && !isOpen) {
-          setIsSwipeGesture(true)
+          isSwipeGestureRef.current = true
           setShowSwipeHint(true)
         }
       }
 
       const handleGlobalTouchMove = (e: TouchEvent) => {
-        if (!isSwipeGesture) return
+        if (!isSwipeGestureRef.current) return
 
         const touch = e.touches[0]
         if (!touch) return
-        const deltaX = touch.clientX - swipeStartX
-        const deltaY = Math.abs(touch.clientY - swipeStartY)
+        const deltaX = touch.clientX - swipeStartRef.current.x
+        const deltaY = Math.abs(touch.clientY - swipeStartRef.current.y)
 
         if (deltaX > 50 && deltaX > deltaY * 2) {
-          setIsSwipeGesture(false)
+          isSwipeGestureRef.current = false
           setShowSwipeHint(false)
           onToggle()
         } else if (deltaY > 50 || deltaX < -10) {
-          setIsSwipeGesture(false)
+          isSwipeGestureRef.current = false
           setShowSwipeHint(false)
         }
       }
 
       const handleGlobalTouchEnd = () => {
-        setIsSwipeGesture(false)
+        isSwipeGestureRef.current = false
         setShowSwipeHint(false)
       }
 
@@ -160,7 +208,7 @@ export const Sidebar = memo(
         document.removeEventListener('touchmove', handleGlobalTouchMove)
         document.removeEventListener('touchend', handleGlobalTouchEnd)
       }
-    }, [swipeStartX, swipeStartY, isSwipeGesture, isOpen, onToggle, showSwipeHint])
+    }, [isOpen, onToggle])
 
     const redactName = useCallback((name: string) => {
       if (!name) return 'User'
@@ -180,59 +228,61 @@ export const Sidebar = memo(
 
     const fetchChats = useCallback(
       async (reset: boolean = false, forceLoading: boolean = false) => {
-        try {
-          if (reset) {
-            if (!hasLoadedOnceRef.current || forceLoading) {
-              setLoading(true)
-            }
-            setHasMore(true)
-          } else {
-            setLoadingMore(true)
+        if (reset) {
+          if (!hasLoadedOnceRef.current || forceLoading) {
+            setLoading(true)
           }
-
-          const offset = reset ? 0 : chats.length
-          const response = await fetch(`/api/chats?limit=15&offset=${offset}`)
-
-          if (response.ok) {
-            const data = await readJson<Chat[]>(response)
-
-            if (reset) {
-              setChats(data)
-              setChatsLoaded(true)
-              hasLoadedOnceRef.current = true
-            } else {
-              setChats(prevChats => {
-                const existingIds = new Set(prevChats.map(chat => chat.id))
-                const newChats = data.filter(chat => !existingIds.has(chat.id))
-                return [...prevChats, ...newChats]
-              })
-            }
-
-            // Prefetch the first batch of chats so switching is instant.
-            if (Array.isArray(data)) {
-              prefetchChats(data.slice(0, 8).map(c => c.id))
-            }
-
-            if (data.length < 15) {
-              setHasMore(false)
-            }
-          }
-        } catch (error) {
-          console.error('Error fetching chats:', error)
-        } finally {
-          setLoading(false)
-          setLoadingMore(false)
-          setIsLoadingMore(false)
+          setHasMore(true)
+        } else {
+          setLoadingMore(true)
         }
+
+        const data = await fetchChatPage(reset ? 0 : chats.length)
+
+        if (data) {
+          if (reset) {
+            setChats(data)
+            setChatsLoaded(true)
+            hasLoadedOnceRef.current = true
+          } else {
+            setChats(prevChats => {
+              const existingIds = new Set(prevChats.map(chat => chat.id))
+              const newChats = data.filter(chat => !existingIds.has(chat.id))
+              return [...prevChats, ...newChats]
+            })
+          }
+
+          if (data.length < CHATS_PAGE_SIZE) {
+            setHasMore(false)
+          }
+        }
+
+        setLoading(false)
+        setLoadingMore(false)
+        setIsLoadingMore(false)
       },
-      [chats.length, setChats, setChatsLoaded, prefetchChats]
+      [chats.length, setChats, setChatsLoaded]
     )
 
+    // Initial chat list: fetched right away when the sidebar is open, otherwise once the browser
+    // is idle so it doesn't compete with the first render (and is ready before the user opens it).
+    // Chat routes are prefetched on hover/focus intent only (see the list items below).
+    const initialFetchStartedRef = useRef(false)
     useEffect(() => {
-      if (!chatsLoaded) {
-        fetchChats(true)
+      if (chatsLoaded || initialFetchStartedRef.current) return
+      const start = () => {
+        if (initialFetchStartedRef.current) return
+        initialFetchStartedRef.current = true
+        void fetchChats(true).then(() => {
+          initialFetchStartedRef.current = false
+        })
       }
-    }, [chatsLoaded, fetchChats])
+      if (isOpen) {
+        start()
+        return undefined
+      }
+      return scheduleIdle(start, 4000)
+    }, [chatsLoaded, fetchChats, isOpen])
 
     useEffect(() => {
       const match = pathname.match(/\/chat\/(.+)$/)
@@ -299,7 +349,6 @@ export const Sidebar = memo(
     const handleScroll = useCallback(
       (e: React.UIEvent<HTMLDivElement>) => {
         const { scrollTop, scrollHeight, clientHeight } = e.currentTarget
-        setScrollPosition(scrollTop)
 
         if (
           scrollHeight - scrollTop - clientHeight < 10 &&
@@ -459,8 +508,6 @@ export const Sidebar = memo(
                 animate="open"
                 exit="closed"
                 className="fixed left-0 top-0 z-50 h-full w-[280px] bg-background/80 backdrop-blur-sm border-r border-border/50 flex flex-col shadow-2xl"
-                onMouseEnter={() => setHovering(true)}
-                onMouseLeave={() => setHovering(false)}
                 onClick={e => e.stopPropagation()}
                 onTouchEnd={e => e.stopPropagation()}
                 style={{
@@ -570,6 +617,7 @@ export const Sidebar = memo(
                               onClick={() => handleChatClick(chat.id)}
                               onMouseEnter={() => prefetchOnHover(chat.id)}
                               onFocus={() => prefetchOnFocus(chat.id)}
+                              onPointerDown={() => prefetchOnFocus(chat.id)}
                               role="button"
                               tabIndex={0}
                               aria-current={
@@ -660,7 +708,10 @@ export const Sidebar = memo(
                           variant="ghost"
                           size="sm"
                           className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors duration-150"
-                          onClick={() => setSettingsOpen(true)}
+                          onClick={() => {
+                            setSettingsMounted(true)
+                            setSettingsOpen(true)
+                          }}
                           aria-label="Open settings"
                         >
                           <Settings className="h-4 w-4 mr-2" />
@@ -692,13 +743,16 @@ export const Sidebar = memo(
         {mounted && typeof window !== 'undefined'
           ? createPortal(sidebarContent, document.body)
           : null}
-        <SettingsDialog
-          open={settingsOpen}
-          onOpenChange={setSettingsOpen}
-          onTriggerOnboarding={() => {
-            window.dispatchEvent(new CustomEvent('triggerOnboarding'))
-          }}
-        />
+        {settingsMounted && (
+          <SettingsDialog
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
+            initialSection={settingsInitialSection}
+            onTriggerOnboarding={() => {
+              window.dispatchEvent(new CustomEvent('triggerOnboarding'))
+            }}
+          />
+        )}
       </>
     )
   },

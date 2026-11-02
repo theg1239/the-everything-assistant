@@ -1,11 +1,10 @@
 import { createCanvasDocument, updateCanvasDocument, getCanvasDocuments } from '@/lib/db'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { canvasCreateSchema, canvasUpdateSchema } from '@/types/api/canvas'
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.id) {
       return new Response('Unauthorized', { status: 401 })
     }
@@ -27,7 +26,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.id) {
       return new Response('Unauthorized', { status: 401 })
     }
@@ -53,7 +52,7 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.id) {
       return new Response('Unauthorized', { status: 401 })
     }

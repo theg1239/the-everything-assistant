@@ -116,6 +116,19 @@ async function main() {
     );
   `)
 
+  // ANN index for `ORDER BY embedding <-> $1` (L2 distance -> vector_l2_ops). pgvector can
+  // only HNSW-index `vector` columns up to 2000 dimensions; text-embedding-3-large (3072)
+  // would need a halfvec expression index plus a matching query, so it is skipped there.
+  if (ragEmbeddingDim <= 2000) {
+    await pool.query(
+      'CREATE INDEX IF NOT EXISTS vit_rag_chunks_embedding_hnsw_idx ON vit_rag_chunks USING hnsw (embedding vector_l2_ops);'
+    )
+  } else {
+    console.log(
+      `Skipping HNSW index: ${ragEmbeddingDim}-dim vectors exceed pgvector's 2000-dim limit for vector_l2_ops (exact scan is used).`
+    )
+  }
+
   console.log(
     `Using RAG embedding provider "${ragEmbeddingProvider}" with model "${ragEmbeddingModelId}" (${ragEmbeddingDim} dims)`
   )

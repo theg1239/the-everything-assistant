@@ -1,5 +1,3 @@
-'use server'
-
 import { prisma } from '@/lib/prisma'
 import { broadcastSlidesSchema, type BroadcastSlide } from '@/types/api/broadcast'
 import { formatDistanceToNow, format } from 'date-fns'

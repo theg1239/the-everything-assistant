@@ -4,13 +4,15 @@ import { syncGeneratedCorpus } from '../scripts/rag-sync-transaction'
 
 function fixture() {
   const calls: string[] = []
+  const insertSizes: number[] = []
   let prepared = 0
   let heads = 0
   let failInsert: string | undefined
   let count = 0
   const client = {
-    async query(sql: string) {
+    async query(sql: string, values?: unknown[]) {
       calls.push(sql)
+      if (sql.startsWith('INSERT')) insertSizes.push(values?.length || 0)
       if (sql.startsWith('SELECT count')) return { rows: [{ count }] }
       if (sql.startsWith('INSERT') && failInsert) {
         const code = failInsert
@@ -36,6 +38,7 @@ function fixture() {
   }
   return {
     calls,
+    insertSizes,
     options,
     setFailure: (code: string) => (failInsert = code),
     setCount: (value: number) => (count = value),
@@ -82,4 +85,13 @@ test('embedding failure cannot delete existing rows', async () => {
     f.calls.some(s => s.startsWith('DELETE')),
     false
   )
+})
+
+test('writes in bounded batches without losing chunks', async () => {
+  const f = fixture()
+  f.options.count = 26
+  f.options.prepareRows = async () =>
+    Array.from({ length: 26 }, (_, idx) => ({ text: `chunk ${idx}`, vector: [1, 2] }))
+  assert.equal(await syncGeneratedCorpus(f.options), 'synced')
+  assert.deepEqual(f.insertSizes, [100, 4])
 })

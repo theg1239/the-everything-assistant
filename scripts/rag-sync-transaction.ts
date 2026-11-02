@@ -38,18 +38,33 @@ export async function syncGeneratedCorpus(options: SyncOptions): Promise<'curren
       await client.query(
         "DELETE FROM vit_rag_chunks WHERE metadata->>'source' IN ('seed-rag-ts', 'vercel-rag-sync')"
       )
-      for (const [idx, row] of rows.entries()) {
-        const metadata = {
-          source: 'vercel-rag-sync',
-          corpusHash: hash,
-          commit,
-          model,
-          idx,
-          length: row.text.length,
-        }
+      // Keep each statement small to avoid parameter limits and long per-row round trips.
+      const batchSize = 25
+      for (let start = 0; start < rows.length; start += batchSize) {
+        const batch = rows.slice(start, start + batchSize)
+        const values: unknown[] = []
+        const placeholders = batch.map((row, offset) => {
+          const idx = start + offset
+          const metadata = {
+            source: 'vercel-rag-sync',
+            corpusHash: hash,
+            commit,
+            model,
+            idx,
+            length: row.text.length,
+          }
+          values.push(
+            randomUUID(),
+            row.text,
+            JSON.stringify(metadata),
+            '[' + row.vector.join(',') + ']'
+          )
+          const base = offset * 4
+          return `($${base + 1}, $${base + 2}, $${base + 3}::jsonb, $${base + 4})`
+        })
         await client.query(
-          'INSERT INTO vit_rag_chunks (id, chunk, metadata, embedding) VALUES ($1, $2, $3::jsonb, $4)',
-          [randomUUID(), row.text, JSON.stringify(metadata), '[' + row.vector.join(',') + ']']
+          `INSERT INTO vit_rag_chunks (id, chunk, metadata, embedding) VALUES ${placeholders.join(', ')}`,
+          values
         )
       }
       await client.query('COMMIT')

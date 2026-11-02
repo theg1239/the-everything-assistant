@@ -57,6 +57,7 @@ import type { Attachment } from '@/types/attachment'
 import { getEnabledMCPConfigs } from '@/lib/mcp-config'
 import { CHAT_COMPOSER_INPUT_ID, createChatInputStore } from '@/lib/stores/chat-input-store'
 import { readPreHydrationValue } from '@/lib/hydration-safe'
+import { CHAT_HISTORY_PAGE_SIZE, chatHistoryPageResponseSchema } from '@/lib/chat-history'
 
 // Rarely-opened, client-only overlays: loaded on first open instead of with the chat route.
 const loadHub = () => import('@/components/hub/hub')
@@ -197,6 +198,7 @@ import {
   cachedUiMessagesToLegacyMessages,
   legacyMessagesToUiMessages,
   uiMessageToLegacyMessage,
+  uiMessagesToLegacyMessages,
   type LegacyMessage,
   type LegacyToolInvocation,
   type AppUIMessage,
@@ -241,11 +243,11 @@ const isTranscriptMessage = (msg: LegacyMessage): boolean => {
   return true
 }
 
-const EMPTY_HUB_STATE: PersonalHubState = {
+const EMPTY_HUB_STATE_PROMISE: Promise<PersonalHubState> = Promise.resolve({
   isLinked: false,
   snapshots: [],
   lastSyncedAt: null,
-}
+})
 
 const HUB_COMMAND_LOOKUP: ReadonlySet<string> = new Set<HubVTOPCommand>(HUB_COMMANDS)
 const isHubCommand = (value: string): value is HubVTOPCommand => HUB_COMMAND_LOOKUP.has(value)
@@ -262,10 +264,17 @@ const areHubActionsEqual = (a?: HubActionHandlers, b?: HubActionHandlers) => {
 }
 
 interface ChatInterfaceProps {
+  /** The newest persisted messages (a page of {@link CHAT_HISTORY_PAGE_SIZE}), oldest first. */
   initialMessages?: Message[]
+  /** Whether older persisted messages exist beyond `initialMessages`. */
+  hasEarlierMessages?: boolean
   chatId?: string
   autoResume?: boolean
-  initialHubState?: PersonalHubState
+  /**
+   * The user's hub state, streamed from the server (not awaited before render): the hub drawer
+   * is closed by default and waits for it itself.
+   */
+  hubState?: Promise<PersonalHubState>
   hubActions?: HubActionHandlers
   chatTitle?: string
 }
@@ -274,11 +283,757 @@ const DAILY_BRIEFING_STORAGE_KEY = 'ea.hub.daily-briefing-date'
 const GUEST_STORAGE_KEY = 'ea.guest-session'
 const GUEST_MESSAGE_LIMIT = 2
 
+/** Calls `fn`, swallowing anything it throws. */
+const runIgnoringErrors = (fn: (() => void) | undefined) => {
+  try {
+    fn?.()
+  } catch {}
+}
+
+/** Scrolls a container to its end instantly (no smooth scrolling). */
+const jumpToBottom = (container: HTMLElement) => {
+  container.scrollTop = container.scrollHeight
+}
+
+/** PDF/image links in the prompt text, attached alongside uploaded files. */
+const extractLinkAttachments = (text: string): Attachment[] => {
+  const urlRegex = /https?:[^\s)]+/gi
+  const matches = text.match(urlRegex) || []
+  return matches
+    .flatMap((rawUrl): Attachment[] => {
+      const url = rawUrl.replace(/[\]\)]$/, '') // trim trailing bracket/paren
+      const lower = url.toLowerCase()
+      const isPdf = lower.endsWith('.pdf')
+      const isPng = lower.endsWith('.png')
+      const isJpg = lower.endsWith('.jpg') || lower.endsWith('.jpeg')
+      const isWebp = lower.endsWith('.webp')
+      const isGif = lower.endsWith('.gif')
+      const isImage = isPng || isJpg || isWebp || isGif
+      if (!isPdf && !isImage) return []
+      const contentType = isPdf
+        ? 'application/pdf'
+        : isPng
+          ? 'image/png'
+          : isJpg
+            ? 'image/jpeg'
+            : isWebp
+              ? 'image/webp'
+              : 'image/gif'
+      const name = url.split('/').pop() || (isPdf ? 'document.pdf' : 'image')
+      return [{ url, name, contentType }]
+    })
+}
+
+/** Parts of an outgoing user message: file parts for attachments and links, then the (quoted) text. */
+const buildUserMessageParts = (
+  text: string,
+  attachments: Attachment[],
+  quotedText: string | null
+): MutableAppMessage['parts'] => {
+  const parts: MutableAppMessage['parts'] = []
+  const allAttachments = [...attachments, ...extractLinkAttachments(text)]
+
+  if (allAttachments.length) {
+    parts.push(
+      ...allAttachments.map(att => ({
+        type: 'file' as const,
+        url: att.url,
+        mediaType: att.contentType,
+        ...(att.name ? { filename: att.name } : {}),
+      }))
+    )
+  }
+
+  const finalContent = quotedText
+    ? `> ${quotedText.replace(/\n/g, '\n> ')}\n\n${text}`
+    : text
+
+  parts.push({ type: 'text', text: finalContent })
+  return parts
+}
+
+/**
+ * Fetches the page of persisted history before `beforeId` (oldest first), shaped like the
+ * transcript's own messages. Failures are logged and toasted; resolves to null then.
+ */
+const loadEarlierHistoryPage = async (
+  chatId: string,
+  beforeId: string
+): Promise<{ messages: LegacyMessage[]; hasMore: boolean } | null> => {
+  try {
+    const query = new URLSearchParams({ before: beforeId, limit: String(CHAT_HISTORY_PAGE_SIZE) })
+    const response = await fetch(`/api/chat/${encodeURIComponent(chatId)}/messages?${query}`, {
+      cache: 'no-store',
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const page = await readJson(response, chatHistoryPageResponseSchema)
+    return {
+      // Same legacy -> UI -> legacy round trip the initial messages take through `useChat`.
+      messages: uiMessagesToLegacyMessages(legacyMessagesToUiMessages(page.messages)),
+      hasMore: page.hasMore,
+    }
+  } catch (error) {
+    console.error('Failed to load earlier messages:', error)
+    toast.error("couldn't load earlier messages — please try again")
+    return null
+  }
+}
+
+/** `earlier` + `messages`, skipping earlier entries `messages` already has (e.g. after a full reload). */
+const prependEarlierMessages = (earlier: LegacyMessage[], messages: LegacyMessage[]) => {
+  if (earlier.length === 0) return messages
+  const present = new Set(messages.map(message => message.id))
+  return [...earlier.filter(message => !present.has(message.id)), ...messages]
+}
+
+/** Shows the PWA install prompt; resolves to whether the user accepted (false on any error). */
+const runInstallPrompt = async (event: BeforeInstallPromptEvent): Promise<boolean> => {
+  try {
+    await event.prompt()
+    const choiceResult = await event.userChoice
+    return Boolean(choiceResult && choiceResult.outcome === 'accepted')
+  } catch {
+    return false
+  }
+}
+
+const dispatchChatTitle = (chatId: string, title: string) => {
+  window.dispatchEvent(new CustomEvent('chatTitleUpdated', { detail: { chatId, title } }))
+}
+
+/** Reads the chat's current title and broadcasts it (best effort). */
+const fetchAndDispatchChatTitle = async (chatId: string): Promise<void> => {
+  try {
+    const res = await fetch(`/api/chats/${chatId}/title`, { cache: 'no-store' })
+    if (res.ok) {
+      const data = await readJson(res, chatTitleResponseSchema)
+      if (data.title) dispatchChatTitle(chatId, data.title)
+    }
+  } catch {}
+}
+
+/** Polls until the generated title replaces "New Chat" (up to `maxAttempts`, 2s apart). */
+const pollChatTitle = async (chatId: string, attempt = 1, maxAttempts = 3): Promise<void> => {
+  const retry = () => {
+    if (attempt < maxAttempts) setTimeout(() => void pollChatTitle(chatId, attempt + 1, maxAttempts), 2000)
+  }
+  try {
+    const response = await fetch(`/api/chats/${chatId}`)
+    if (!response.ok) {
+      retry()
+      return
+    }
+    const chatData = await readJson(response, chatDetailResponseSchema)
+    if (chatData.title && chatData.title !== 'New Chat') {
+      dispatchChatTitle(chatId, chatData.title)
+      return
+    }
+    retry()
+  } catch {
+    retry()
+  }
+}
+
+/** Reloads a chat's persisted messages. Rejects on HTTP or schema errors. */
+const fetchPersistedChatMessages = async (chatId: string) => {
+  const response = await fetch(`/api/chats/${chatId}`)
+  if (!response.ok) {
+    throw new Error('Failed to refresh conversation after VTOP data retrieval')
+  }
+  const chatData = await readJson(response, chatDetailResponseSchema)
+  return chatData.messages
+}
+
+interface GuestSessionHandlers {
+  onChatId: (chatId: string) => void
+  onMessages: (messages: MutableAppMessage[]) => void
+  onUserMessageCount: (count: number) => void
+}
+
+/**
+ * Restores the guest session from localStorage through `handlers`; when none is stored, seeds one
+ * for `seedChatId` (reporting it via `onChatId`). Storage/JSON errors are logged, not thrown.
+ */
+const restoreGuestSession = (seedChatId: string, handlers: GuestSessionHandlers) => {
+  try {
+    const stored = window.localStorage.getItem(GUEST_STORAGE_KEY)
+    if (stored) {
+      const parsedJson: unknown = JSON.parse(stored)
+      const parsed = isRecord(parsedJson) ? parsedJson : null
+      const storedChatId = readString(parsed?.chatId)
+      if (storedChatId) {
+        handlers.onChatId(storedChatId)
+      }
+      const storedMessages = parsed?.messages
+      if (
+        Array.isArray(storedMessages) &&
+        storedMessages.length > 0 &&
+        storedMessages.every(isStoredUiMessage)
+      ) {
+        handlers.onMessages(storedMessages)
+      }
+      if (typeof parsed?.userMessageCount === 'number') {
+        handlers.onUserMessageCount(parsed.userMessageCount)
+      }
+      return
+    }
+    const seedId = seedChatId || generateUUID()
+    window.localStorage.setItem(
+      GUEST_STORAGE_KEY,
+      JSON.stringify({
+        chatId: seedId,
+        messages: [],
+        userMessageCount: 0,
+        lastUpdated: new Date().toISOString(),
+      })
+    )
+    handlers.onChatId(seedId)
+  } catch (error) {
+    console.error('Failed to restore guest session', error)
+  }
+}
+
+const persistGuestSession = (chatId: string, messages: MutableAppMessage[], userMessageCount: number) => {
+  try {
+    window.localStorage.setItem(
+      GUEST_STORAGE_KEY,
+      JSON.stringify({
+        chatId,
+        messages,
+        userMessageCount,
+        lastUpdated: new Date().toISOString(),
+      })
+    )
+  } catch (error) {
+    console.error('Failed to persist guest chat', error)
+  }
+}
+
+/**
+ * The stored guest chat to import after sign-in, or null when there is nothing importable (the
+ * stored session is then cleared).
+ */
+const readGuestChatForImport = (stored: string): { chatId: unknown; messages: unknown[] } | null => {
+  try {
+    const parsedJson: unknown = JSON.parse(stored)
+    const parsed = isRecord(parsedJson) ? parsedJson : null
+    if (!parsed || !Array.isArray(parsed.messages) || parsed.messages.length === 0) {
+      window.localStorage.removeItem(GUEST_STORAGE_KEY)
+      return null
+    }
+    return { chatId: parsed.chatId, messages: parsed.messages }
+  } catch (error) {
+    console.error('Failed to parse guest chat storage', error)
+    window.localStorage.removeItem(GUEST_STORAGE_KEY)
+    return null
+  }
+}
+
+/**
+ * Moves a stored guest chat into the signed-in account. The stored guest session is cleared
+ * whatever happens; resolves to the imported chat's path, or null if it wasn't imported.
+ */
+const importGuestChat = async (chatId: unknown, messages: unknown[]): Promise<string | null> => {
+  try {
+    const res = await fetch('/api/guest/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatId, messages }),
+    })
+    if (res.ok) {
+      const dataJson: unknown = await res.json()
+      const data = isRecord(dataJson) ? dataJson : {}
+      window.localStorage.removeItem(GUEST_STORAGE_KEY)
+      toast.success('moved your guest chat into your account')
+      return readString(data.path) || `/chat/${readString(data.chatId)}`
+    }
+    const msg = await res.text()
+    console.warn('Guest import skipped', res.status, msg)
+    window.localStorage.removeItem(GUEST_STORAGE_KEY)
+  } catch (error) {
+    console.error('Error importing guest chat', error)
+    window.localStorage.removeItem(GUEST_STORAGE_KEY)
+  }
+  return null
+}
+
+type UploadingAttachment = { id: string; name: string; contentType: string }
+
+/**
+ * Uploads files one at a time (files over 25MB are skipped with a toast); `onFileSettled` fires as
+ * each file finishes or is skipped. Resolves to the uploaded attachments, or [] if the batch failed.
+ */
+const uploadAttachmentFiles = async (
+  uploads: Array<{ file: File; placeholder: UploadingAttachment }>,
+  onFileSettled: (uploadId: string) => void
+): Promise<Attachment[]> => {
+  try {
+    const uploaded: Attachment[] = []
+    for (const { file, placeholder } of uploads) {
+      const uploadId = placeholder.id
+      const sizeMb = file.size / (1024 * 1024)
+      if (sizeMb > 25) {
+        toast.error(`${file.name} is too large (max 25MB)`, { position: 'top-center' })
+        onFileSettled(uploadId)
+        continue
+      }
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch('/api/files/upload', { method: 'POST', body: formData })
+      if (!res.ok) {
+        const errJson: unknown = await res.json().catch(() => ({ error: undefined }))
+        const errText = isRecord(errJson) ? readString(errJson.error) : undefined
+        toast.error(errText || `Failed to upload ${file.name}`)
+        onFileSettled(uploadId)
+        continue
+      }
+      const dataJson: unknown = await res.json()
+      const data = isRecord(dataJson) ? dataJson : {}
+      uploaded.push({
+        url: readString(data.url) ?? '',
+        name: readString(data.name) || file.name,
+        contentType: readString(data.contentType) ?? '',
+      })
+      onFileSettled(uploadId)
+    }
+    return uploaded
+  } catch (err) {
+    console.error('attachment upload failed', err)
+    toast.error('upload failed — please try again')
+    return []
+  }
+}
+
+/** Extracts the tool result from a direct VTOP tool-call response (JSON or data-stream frames). */
+function parseVTOPResponse(raw: string): unknown {
+  if (!raw || typeof raw !== 'string') {
+    throw new Error('Empty response')
+  }
+
+  const trimmed = raw.trim()
+
+  if (/^[\[{]/.test(trimmed)) {
+    try {
+      const parsedJson: unknown = JSON.parse(trimmed)
+      return parsedJson
+    } catch {
+    }
+  }
+
+  const lines = raw.replace(/\r/g, '').split('\n')
+  const frameHeader = /^([a-z0-9]):(.*)$/i
+
+  type Frame = { prefix: string; payload: string }
+  const frames: Frame[] = []
+
+  let current: Frame | null = null
+
+  const flush = () => {
+    if (current) {
+      current.payload = current.payload.replace(/\n$/, '')
+      frames.push(current)
+      current = null
+    }
+  }
+
+  lines.forEach((line, i) => {
+    // keep exact spacing; payload might be HTML
+    const m = line.match(frameHeader)
+
+    if (m) {
+      flush()
+      const frame: Frame = { prefix: m[1] ?? '', payload: m[2] ?? '' }
+      if (i < lines.length - 1) frame.payload += '\n' // preserve newline after first line
+      current = frame
+    } else {
+      if (current) {
+        current.payload += line + (i < lines.length - 1 ? '\n' : '')
+      } else {
+      }
+    }
+  })
+  flush()
+
+  const safeParseJSON = (s: string): unknown => {
+    const t = s.trim()
+    if (!/^[\[{]/.test(t)) throw new Error('Not JSON')
+    try {
+      const parsedJson: unknown = JSON.parse(t)
+      return parsedJson
+    } catch (_) {
+      const firstBrace = t.indexOf('{')
+      const lastBrace = t.lastIndexOf('}')
+      const firstBracket = t.indexOf('[')
+      const lastBracket = t.lastIndexOf(']')
+      const sliceObject =
+        firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace
+          ? t.slice(firstBrace, lastBrace + 1)
+          : null
+      const sliceArray =
+        firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket
+          ? t.slice(firstBracket, lastBracket + 1)
+          : null
+      const candidate = sliceObject ?? sliceArray
+      if (!candidate) throw new Error('JSON extract failed')
+      const parsedCandidate: unknown = JSON.parse(candidate)
+      return parsedCandidate
+    }
+  }
+
+  const decodePossibleJSONString = (s: string): string => {
+    const t = s.trim()
+    if (t.startsWith('"') && t.endsWith('"') && !t.includes('\n')) {
+      try {
+        const decoded: unknown = JSON.parse(t) // unescapes \n, \", etc.
+        if (typeof decoded === 'string') return decoded
+      } catch {
+      }
+    }
+    if (t.startsWith('"') && t.endsWith('"')) {
+      return t.slice(1, -1)
+    }
+    return s
+  }
+
+  const toolFrames: unknown[] = []
+  const textChunks: string[] = []
+
+  for (const f of frames) {
+    const payload = f.payload ?? ''
+
+    if (f.prefix === 'a' || f.prefix === '9' || f.prefix === 'e') {
+      const trimmedPayload = payload.trim()
+      try {
+        const parsed = safeParseJSON(trimmedPayload)
+        if (f.prefix === 'a') toolFrames.push(parsed)
+      } catch {
+      }
+    } else if (f.prefix === '0') {
+      textChunks.push(decodePossibleJSONString(payload))
+    } else {
+    }
+  }
+
+  const chosen =
+    [...toolFrames].reverse().find(x => isRecord(x) && 'result' in x) ??
+    [...toolFrames].reverse().find(x => x) // fallback to any 'a' frame
+
+  if (isRecord(chosen) && chosen.result !== undefined) {
+    return { result: chosen.result }
+  }
+  if (chosen) {
+    return { result: chosen } // sometimes the object itself is the result
+  }
+  if (textChunks.length) {
+    return { result: { success: true, output: textChunks.join('\n') } }
+  }
+
+  throw new Error('No parsable tool frames found in streaming response')
+}
+
+interface VtopCredentialsContext {
+  chatId: string | undefined
+  resolvedChatId: string
+  messages: LegacyMessage[]
+  uiMessages: MutableAppMessage[]
+  showFullChat: boolean
+  setVtopLoading: (loading: boolean) => void
+  setUiMessages: (
+    messages: MutableAppMessage[] | ((prev: MutableAppMessage[]) => MutableAppMessage[])
+  ) => void
+  setLastAssistantMessage: (text: string) => void
+  setShowFullChat: (show: boolean) => void
+  clearToolResult: (toolCallId: string) => void
+  updateToolResult: (toolCallId: string, command: string, result: unknown) => void
+  getScrollContainer: () => HTMLElement | null | undefined
+}
+
+/**
+ * Re-runs the VTOP tool call that asked for credentials as a direct tool call on /api/chat and
+ * merges its result into the transcript. Errors are reported with toasts, never thrown.
+ */
+const submitVtopCredentials = async (
+  credentials: { username: string; encryptedPassword: string },
+  originalToolCall: VtopOriginalToolCall | null | undefined,
+  {
+    chatId,
+    resolvedChatId,
+    messages,
+    uiMessages,
+    showFullChat,
+    setVtopLoading,
+    setUiMessages,
+    setLastAssistantMessage,
+    setShowFullChat,
+    clearToolResult,
+    updateToolResult,
+    getScrollContainer,
+  }: VtopCredentialsContext
+): Promise<void> => {
+  try {
+    setVtopLoading(true)
+    const originalResult = isRecord(originalToolCall?.result) ? originalToolCall.result : undefined
+    const command = readString(originalToolCall?.args?.command) || readString(originalResult?.command)
+    if (!command) {
+      console.error('No command found in original tool call')
+      setVtopLoading(false)
+      return
+    }
+    const toolCallId = originalToolCall?.toolCallId || Date.now().toString()
+    clearToolResult(toolCallId)
+
+    const updatedMessagesForLoading = messages.map(message => {
+      if (message.toolInvocations) {
+        const updatedToolInvocations = message.toolInvocations.map(
+          (toolInvocation): LegacyToolInvocation => {
+            if (toolInvocation.toolCallId && toolCallId) {
+              return {
+                ...toolInvocation,
+                toolCallId: toolCallId,
+                state: 'call',
+                result: undefined,
+              }
+            }
+            return toolInvocation
+          }
+        )
+        return {
+          ...message,
+          toolInvocations: updatedToolInvocations,
+        }
+      }
+      return message
+    })
+
+    setUiMessages(prev => {
+      const base = updatedMessagesForLoading.map(legacyToMutableMessage)
+      const last = base.at(-1)
+      if (!last) return base
+      const toolInvocationPayload: LegacyToolInvocation = {
+        toolCallId: toolCallId,
+        toolName: 'queryVTOP',
+        args: { command, username: credentials.username },
+        state: 'call',
+        result: undefined,
+      }
+      if (last.role === 'assistant') {
+        const exists = last.toolInvocations?.some(t => t.toolCallId === toolCallId)
+        if (!exists) {
+          base[base.length - 1] = {
+            ...last,
+            toolInvocations: [...(last.toolInvocations || []), toolInvocationPayload],
+          }
+        } else {
+          base[base.length - 1] = {
+            ...last,
+            toolInvocations: (last.toolInvocations ?? []).map(t =>
+              t.toolCallId === toolCallId ? { ...t, state: 'call', result: undefined } : t
+            ),
+          }
+        }
+      } else {
+        base.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          role: 'assistant',
+          content: '',
+          parts: [],
+          toolInvocations: [toolInvocationPayload],
+        })
+      }
+      return base
+    })
+
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages: legacyMessagesToUiMessages(messages),
+        directToolCall: {
+          toolName: 'queryVTOP',
+          args: {
+            command,
+            username: credentials.username,
+            password: credentials.encryptedPassword,
+            ...originalToolCall?.args,
+          },
+          toolCallId: toolCallId,
+        },
+        id: resolvedChatId,
+      }),
+    })
+
+    if (response.ok) {
+      const responseText = await response.text()
+
+      let parsedResponse: unknown
+      try {
+        parsedResponse = parseVTOPResponse(responseText)
+      } catch (err) {
+        console.error('VTOP parse error. Raw response begins with:', responseText.slice(0, 180))
+        console.error(err)
+        toast.error('Error processing VTOP response. Please try again.')
+        setVtopLoading(false)
+        return
+      }
+      const toolResult: unknown = isRecord(parsedResponse) ? parsedResponse.result : undefined
+      const toolResultRecord = isRecord(toolResult) ? toolResult : undefined
+
+      if (toolCallId) {
+        updateToolResult(toolCallId, command, toolResult)
+      }
+      const updatedMessages = uiMessages.map(message => {
+        if (message.toolInvocations) {
+          const updatedToolInvocations = message.toolInvocations.map(
+            (toolInvocation): LegacyToolInvocation => {
+              if (toolInvocation.toolCallId && toolInvocation.toolCallId === toolCallId) {
+                return {
+                  ...toolInvocation,
+                  result: toolResult,
+                  state: 'result',
+                }
+              }
+              return toolInvocation
+            }
+          )
+
+          const updatedParts = message.parts
+            ? message.parts.map(part => {
+                if (
+                  isLegacyToolInvocationPart(part) &&
+                  part.toolInvocation.toolCallId === toolCallId
+                ) {
+                  return {
+                    ...part,
+                    toolInvocation: {
+                      ...part.toolInvocation,
+                      result: toolResult,
+                      state: 'result',
+                    },
+                  }
+                }
+                return part
+              })
+            : message.parts
+
+          return {
+            ...message,
+            toolInvocations: updatedToolInvocations,
+            parts: updatedParts,
+          }
+        }
+        return message
+      })
+      setUiMessages([...updatedMessages])
+
+      try {
+        const formattedContent =
+          (toolResultRecord &&
+            (readString(toolResultRecord.formatted_content) || readString(toolResultRecord.summary))) ||
+          ''
+        if (formattedContent) {
+          setUiMessages(prev => {
+            const idx = prev.findIndex(
+              m =>
+                m.role === 'assistant' &&
+                m.toolInvocations?.some(t => t.toolCallId === toolCallId)
+            )
+            const target = prev[idx]
+            if (idx !== -1 && target) {
+              const clone = prev.map(message => ({ ...message }))
+              const existingContent = target.content || ''
+              if (existingContent.trim() === '') {
+                clone[idx] = { ...target, content: formattedContent }
+              } else if (!existingContent.includes(formattedContent.slice(0, 30))) {
+                clone[idx] = {
+                  ...target,
+                  content: `${existingContent}\n\n${formattedContent}`.trim(),
+                }
+              }
+              return clone
+            }
+            const newAssistantMsg: MutableAppMessage = {
+              id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+              role: 'assistant',
+              content: formattedContent,
+              parts: [],
+              toolInvocations: [
+                {
+                  toolCallId: toolCallId,
+                  toolName: 'queryVTOP',
+                  args: { command },
+                  result: toolResult,
+                  state: 'result',
+                },
+              ],
+            }
+            return [...prev, newAssistantMsg]
+          })
+          try {
+            setLastAssistantMessage(
+              formattedContent.length > 400 ? formattedContent.slice(0, 400) : formattedContent
+            )
+          } catch {}
+        }
+        if (!showFullChat) setShowFullChat(true)
+        setTimeout(() => {
+          try {
+            const container = getScrollContainer()
+            if (container) jumpToBottom(container)
+          } catch {}
+        }, 50)
+      } catch (uiUpdateErr) {
+        console.warn('Non-fatal UI update issue after VTOP parse:', uiUpdateErr)
+      }
+
+      if (
+        toolResultRecord &&
+        toolResultRecord.success !== false &&
+        (toolResultRecord.data || toolResultRecord.output)
+      ) {
+        if (chatId) {
+          setTimeout(() => {
+            fetchPersistedChatMessages(chatId).then(
+              persisted => setUiMessages(legacyMessagesToUiMessages(persisted)),
+              (error: unknown) => {
+                console.warn('Failed to refresh conversation after VTOP data retrieval:', error)
+              }
+            )
+          }, 500)
+        }
+      } else if (toolResultRecord && toolResultRecord.success === false) {
+        const errorMessage =
+          readString(toolResultRecord.error) ||
+          readString(toolResultRecord.message) ||
+          'Unknown error occurred'
+        if (
+          errorMessage.includes('Invalid LoginId/Password') ||
+          errorMessage.includes('Login failed')
+        ) {
+          toast.error('Invalid VTOP credentials. Please check your username and password.')
+        }
+      }
+      setVtopLoading(false)
+    } else {
+      const errorText = await response.text()
+      console.error('VTOP API Error:', response.status, errorText)
+      toast.error('Failed to retrieve VTOP data. Please try again.')
+      setVtopLoading(false)
+    }
+  } catch (error) {
+    console.error('Error executing VTOP tool:', error)
+    toast.error('An error occurred while retrieving VTOP data. Please try again.')
+    setVtopLoading(false)
+  }
+}
+
 function PureChatInterfaceComponent({
   initialMessages = [],
+  hasEarlierMessages = false,
   chatId,
   autoResume = false,
-  initialHubState,
+  hubState,
   hubActions,
   chatTitle,
 }: ChatInterfaceProps) {
@@ -302,12 +1057,12 @@ function PureChatInterfaceComponent({
   const [hubOpen, setHubOpen] = useState(false)
   const [pendingBriefingAction, setPendingBriefingAction] = useState<HubVTOPCommand | null>(null)
   const [showDailyBriefingLabel, setShowDailyBriefingLabel] = useState(false)
-  const hubSeed = initialHubState ?? EMPTY_HUB_STATE
+  const hubStatePromise = hubState ?? EMPTY_HUB_STATE_PROMISE
   const hubActionHandlers = useMemo<HubActionHandlers>(() => {
     if (hubActions) return hubActions
     return {
-      refreshState: async () => hubSeed,
-      syncCore: async () => hubSeed,
+      refreshState: () => hubStatePromise,
+      syncCore: () => hubStatePromise,
       refreshVTOP: async () => {
         throw new Error('hub actions are unavailable in this context')
       },
@@ -315,7 +1070,7 @@ function PureChatInterfaceComponent({
         throw new Error('hub actions are unavailable in this context')
       },
     }
-  }, [hubActions, hubSeed])
+  }, [hubActions, hubStatePromise])
   const [vtopLoading, setVtopLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [hasUserInitiatedConversation, setHasUserInitiatedConversation] = useState(false)
@@ -345,28 +1100,23 @@ function PureChatInterfaceComponent({
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [optimisticChatId, setOptimisticChatId] = useState<string | undefined>(chatId)
-  const fallbackChatIdRef = useRef<string>(chatId ?? generateUUID())
-  useEffect(() => {
-    if (chatId) {
-      fallbackChatIdRef.current = chatId
-    }
-  }, [chatId])
-  useEffect(() => {
-    if (!chatId && optimisticChatId) {
-      fallbackChatIdRef.current = optimisticChatId
-    }
-  }, [chatId, optimisticChatId])
   const persistedChatId = chatId ?? optimisticChatId
-  const resolvedChatId = persistedChatId ?? fallbackChatIdRef.current
+  // Last known chat id (initially a fresh one), used once neither the prop nor the optimistic id
+  // is set — e.g. after "new chat" clears the optimistic id.
+  const [fallbackChatId, setFallbackChatId] = useState<string>(() => chatId ?? generateUUID())
+  if (persistedChatId && persistedChatId !== fallbackChatId) setFallbackChatId(persistedChatId)
+  const resolvedChatId = persistedChatId ?? fallbackChatId
   const currentChatIdRef = useRef<string | undefined>(chatId)
   const guestImportingRef = useRef(false)
   const autoRetryRef = useRef(0)
   const lastUserMessageIdRef = useRef<string | null>(null)
+  // Latest committed transcript, for callbacks (useChat's onFinish, composer autocomplete).
+  const messagesRef = useRef<LegacyMessage[]>([])
   const { updateToolResult, clearToolResult } = useVTOP()
   const { rateLimitError, clearRateLimitError, checkForRateLimitError } = useRateLimit()
   const { data: session } = useSession()
   const isGuest = !session?.user
-  const shareableChatId = !isGuest ? currentChatIdRef.current || persistedChatId : undefined
+  const shareableChatId = !isGuest ? resolvedChatId : undefined
   const { showOnboarding, closeOnboarding } = useOnboarding()
   const fallbackTitle = useMemo(
     () => chatTitle || extractTitleFromContent(initialMessages[0]?.content || 'shared chat'),
@@ -503,9 +1253,9 @@ function PureChatInterfaceComponent({
     if (!pendingBriefingAction || !hubOpen) return
     let cancelled = false
     let timeout: number | undefined
-    // The hub is lazy-loaded: start the delay once its chunk is in, as when it was bundled here.
-    loadHub()
-      .catch(() => undefined)
+    // The hub is lazy-loaded and waits for the streamed hub state: start the delay once both are
+    // in, so the hub shell is mounted and listening when the action fires.
+    Promise.all([loadHub().catch(() => undefined), hubStatePromise.catch(() => undefined)])
       .then(() => {
         if (cancelled) return
         timeout = window.setTimeout(() => {
@@ -521,21 +1271,16 @@ function PureChatInterfaceComponent({
       cancelled = true
       window.clearTimeout(timeout)
     }
-  }, [pendingBriefingAction, hubOpen])
+  }, [pendingBriefingAction, hubOpen, hubStatePromise])
 
   const handleInstallClick = async () => {
-    if (deferredPrompt && deferredPrompt.prompt) {
-      try {
-        await deferredPrompt.prompt()
-        const choiceResult = await deferredPrompt.userChoice
-        if (choiceResult && choiceResult.outcome === 'accepted') {
-          setIsInstalled(true)
-        }
-      } catch (err) {
-      } finally {
-        setDeferredPrompt(null)
-        setCanInstall(false)
+    if (deferredPrompt) {
+      const accepted = await runInstallPrompt(deferredPrompt)
+      if (accepted) {
+        setIsInstalled(true)
       }
+      setDeferredPrompt(null)
+      setCanInstall(false)
       return
     }
 
@@ -730,7 +1475,6 @@ function PureChatInterfaceComponent({
 
       if (metadataChatId && metadataChatPath && shouldNavigate) {
         setOptimisticChatId(metadataChatId)
-        fallbackChatIdRef.current = metadataChatId
         currentChatIdRef.current = metadataChatId
         setChatCreatedEventDispatched(true)
         const targetPath = metadataChatPath
@@ -740,7 +1484,9 @@ function PureChatInterfaceComponent({
           new CustomEvent('newChatCreated', {
             detail: {
               id: metadataChatId,
-              title: metadataChatTitle || extractTitleFromContent(messages[0]?.content || 'New Chat'),
+              title:
+                metadataChatTitle ||
+                extractTitleFromContent(messagesRef.current[0]?.content || 'New Chat'),
               path: targetPath,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
@@ -749,7 +1495,6 @@ function PureChatInterfaceComponent({
         )
       } else if (!shouldNavigate && metadataChatId && !chatCreatedEventDispatched) {
         setOptimisticChatId(metadataChatId)
-        fallbackChatIdRef.current = metadataChatId
         currentChatIdRef.current = metadataChatId
         setChatCreatedEventDispatched(true)
       }
@@ -773,41 +1518,8 @@ function PureChatInterfaceComponent({
               detail: { chatId: targetChatId, title: newTitle },
             })
           )
-          const fetchAndDispatchTitle = async () => {
-            try {
-              const res = await fetch(`/api/chats/${targetChatId}/title`, { cache: 'no-store' })
-              if (res.ok) {
-                const data = await readJson(res, chatTitleResponseSchema)
-                if (data.title) {
-                  window.dispatchEvent(
-                    new CustomEvent('chatTitleUpdated', {
-                      detail: { chatId: targetChatId, title: data.title },
-                    })
-                  )
-                }
-              }
-            } catch {}
-          }
-          fetchAndDispatchTitle()
-          const checkTitleUpdate = async (attempt = 1, maxAttempts = 3) => {
-            try {
-              const response = await fetch(`/api/chats/${targetChatId}`)
-              if (!response.ok) throw new Error('Failed to load chat metadata')
-              const chatData = await readJson(response, chatDetailResponseSchema)
-              if (chatData.title && chatData.title !== 'New Chat') {
-                window.dispatchEvent(
-                  new CustomEvent('chatTitleUpdated', {
-                    detail: { chatId: targetChatId, title: chatData.title },
-                  })
-                )
-                return
-              }
-              if (attempt < maxAttempts) setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
-            } catch (error) {
-              if (attempt < maxAttempts) setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
-            }
-          }
-          setTimeout(() => checkTitleUpdate(), 1500)
+          void fetchAndDispatchChatTitle(targetChatId)
+          setTimeout(() => void pollChatTitle(targetChatId), 1500)
         }
       }
     },
@@ -820,9 +1532,7 @@ function PureChatInterfaceComponent({
       if (shouldAutoRetryStreamError(errorMessage, bodyString)) {
         if (autoRetryRef.current < 1) {
           autoRetryRef.current += 1
-          try {
-            clearError?.()
-          } catch {}
+          runIgnoringErrors(clearError)
           setTimeout(() => {
             regenerate?.()
           }, 250)
@@ -898,7 +1608,6 @@ function PureChatInterfaceComponent({
 
   // The composer only needs recent messages when an autocomplete request fires; read them lazily
   // through a stable getter so streaming ticks don't re-render the input.
-  const messagesRef = useRef(messages)
   useEffect(() => {
     messagesRef.current = messages
   }, [messages])
@@ -928,65 +1637,23 @@ function PureChatInterfaceComponent({
   useEffect(() => {
     if (!isGuest) return
     if (typeof window === 'undefined') return
-    try {
-      const stored = window.localStorage.getItem(GUEST_STORAGE_KEY)
-      if (stored) {
-        const parsedJson: unknown = JSON.parse(stored)
-        const parsed = isRecord(parsedJson) ? parsedJson : null
-        const storedChatId = readString(parsed?.chatId)
-        if (storedChatId) {
-          setOptimisticChatId(storedChatId)
-          fallbackChatIdRef.current = storedChatId
-          currentChatIdRef.current = storedChatId
-        }
-        const storedMessages = parsed?.messages
-        if (
-          Array.isArray(storedMessages) &&
-          storedMessages.length > 0 &&
-          storedMessages.every(isStoredUiMessage)
-        ) {
-          setUiMessages(storedMessages)
-          setShowFullChat(true)
-        }
-        if (typeof parsed?.userMessageCount === 'number') {
-          setGuestTotalUserMessages(parsed.userMessageCount)
-        }
-        return
-      }
-      const seedId = resolvedChatId || generateUUID()
-      window.localStorage.setItem(
-        GUEST_STORAGE_KEY,
-        JSON.stringify({
-          chatId: seedId,
-          messages: [],
-          userMessageCount: 0,
-          lastUpdated: new Date().toISOString(),
-        })
-      )
-      setOptimisticChatId(seedId)
-      fallbackChatIdRef.current = seedId
-      currentChatIdRef.current = seedId
-    } catch (error) {
-      console.error('Failed to restore guest session', error)
-    }
+    restoreGuestSession(resolvedChatId, {
+      onChatId: storedChatId => {
+        setOptimisticChatId(storedChatId)
+        currentChatIdRef.current = storedChatId
+      },
+      onMessages: storedMessages => {
+        setUiMessages(storedMessages)
+        setShowFullChat(true)
+      },
+      onUserMessageCount: setGuestTotalUserMessages,
+    })
   }, [isGuest, resolvedChatId, setUiMessages, setShowFullChat])
 
   useEffect(() => {
     if (!isGuest) return
     if (typeof window === 'undefined') return
-    try {
-      window.localStorage.setItem(
-        GUEST_STORAGE_KEY,
-        JSON.stringify({
-          chatId: resolvedChatId,
-          messages: uiMessages,
-          userMessageCount: guestTotalUserMessages,
-          lastUpdated: new Date().toISOString(),
-        })
-      )
-    } catch (error) {
-      console.error('Failed to persist guest chat', error)
-    }
+    persistGuestSession(resolvedChatId, uiMessages, guestTotalUserMessages)
   }, [isGuest, uiMessages, resolvedChatId, guestTotalUserMessages])
 
   useEffect(() => {
@@ -994,44 +1661,13 @@ function PureChatInterfaceComponent({
     if (typeof window === 'undefined') return
     const stored = window.localStorage.getItem(GUEST_STORAGE_KEY)
     if (!stored || guestImportingRef.current) return
-    try {
-      const parsedJson: unknown = JSON.parse(stored)
-      const parsed = isRecord(parsedJson) ? parsedJson : null
-      if (!parsed || !Array.isArray(parsed.messages) || parsed.messages.length === 0) {
-        window.localStorage.removeItem(GUEST_STORAGE_KEY)
-        return
-      }
-      guestImportingRef.current = true
-      ;(async () => {
-        try {
-          const res = await fetch('/api/guest/import', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chatId: parsed.chatId, messages: parsed.messages }),
-          })
-          if (res.ok) {
-            const dataJson: unknown = await res.json()
-            const data = isRecord(dataJson) ? dataJson : {}
-            window.localStorage.removeItem(GUEST_STORAGE_KEY)
-            toast.success('moved your guest chat into your account')
-            router.push(readString(data.path) || `/chat/${readString(data.chatId)}`)
-          } else {
-            const msg = await res.text()
-            console.warn('Guest import skipped', res.status, msg)
-            window.localStorage.removeItem(GUEST_STORAGE_KEY)
-          }
-        } catch (error) {
-          console.error('Error importing guest chat', error)
-          window.localStorage.removeItem(GUEST_STORAGE_KEY)
-        } finally {
-          guestImportingRef.current = false
-        }
-      })()
-    } catch (error) {
-      console.error('Failed to parse guest chat storage', error)
+    const guestChat = readGuestChatForImport(stored)
+    if (!guestChat) return
+    guestImportingRef.current = true
+    void importGuestChat(guestChat.chatId, guestChat.messages).then(path => {
+      if (path) router.push(path)
       guestImportingRef.current = false
-      window.localStorage.removeItem(GUEST_STORAGE_KEY)
-    }
+    })
   }, [session?.user?.id, router, isGuest])
 
   const isLoading = status === 'submitted' || status === 'streaming'
@@ -1148,7 +1784,7 @@ function PureChatInterfaceComponent({
     if (initialMessages.length > 0 && showFullChat) {
       const container = contentRef.current?.parentElement
       if (container) {
-        container.scrollTop = container.scrollHeight
+        jumpToBottom(container)
       } else if (messagesEndRef.current) {
         messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' })
       }
@@ -1301,79 +1937,20 @@ function PureChatInterfaceComponent({
       }))
       setUploadingAttachments(uploads.map(upload => upload.placeholder))
 
-      try {
-        const uploaded: Attachment[] = []
-        for (const { file, placeholder } of uploads) {
-          const uploadId = placeholder.id
-          const sizeMb = file.size / (1024 * 1024)
-          if (sizeMb > 25) {
-            toast.error(`${file.name} is too large (max 25MB)`, { position: 'top-center' })
-            setUploadingAttachments(prev => prev.filter(u => u.id !== uploadId))
-            continue
-          }
-          const formData = new FormData()
-          formData.append('file', file)
-          const res = await fetch('/api/files/upload', { method: 'POST', body: formData })
-          if (!res.ok) {
-            const errJson: unknown = await res.json().catch(() => ({ error: undefined }))
-            const errText = isRecord(errJson) ? readString(errJson.error) : undefined
-            toast.error(errText || `Failed to upload ${file.name}`)
-            setUploadingAttachments(prev => prev.filter(u => u.id !== uploadId))
-            continue
-          }
-          const dataJson: unknown = await res.json()
-          const data = isRecord(dataJson) ? dataJson : {}
-          uploaded.push({
-            url: readString(data.url) ?? '',
-            name: readString(data.name) || file.name,
-            contentType: readString(data.contentType) ?? '',
-          })
-          // Remove this file from uploading state
-          setUploadingAttachments(prev => prev.filter(u => u.id !== uploadId))
-        }
-        if (uploaded.length) {
-          setAttachments(prev => [...prev, ...uploaded])
-        }
-      } catch (err) {
-        console.error('attachment upload failed', err)
-        toast.error('upload failed — please try again')
-      } finally {
-        setUploadingAttachments([])
+      // Each file leaves the uploading state as soon as it finishes (or is skipped).
+      const uploaded = await uploadAttachmentFiles(uploads, uploadId =>
+        setUploadingAttachments(prev => prev.filter(u => u.id !== uploadId))
+      )
+      if (uploaded.length) {
+        setAttachments(prev => [...prev, ...uploaded])
       }
+      setUploadingAttachments([])
     },
     [attachments.length, isGuest]
   )
 
   const handleRemoveAttachment = useCallback((url: string) => {
     setAttachments(prev => prev.filter(att => att.url !== url))
-  }, [])
-
-  const extractLinkAttachments = useCallback((text: string): Attachment[] => {
-    const urlRegex = /https?:[^\s)]+/gi
-    const matches = text.match(urlRegex) || []
-    return matches
-      .flatMap((rawUrl): Attachment[] => {
-        const url = rawUrl.replace(/[\]\)]$/, '') // trim trailing bracket/paren
-        const lower = url.toLowerCase()
-        const isPdf = lower.endsWith('.pdf')
-        const isPng = lower.endsWith('.png')
-        const isJpg = lower.endsWith('.jpg') || lower.endsWith('.jpeg')
-        const isWebp = lower.endsWith('.webp')
-        const isGif = lower.endsWith('.gif')
-        const isImage = isPng || isJpg || isWebp || isGif
-        if (!isPdf && !isImage) return []
-        const contentType = isPdf
-          ? 'application/pdf'
-          : isPng
-            ? 'image/png'
-            : isJpg
-              ? 'image/jpeg'
-              : isWebp
-                ? 'image/webp'
-                : 'image/gif'
-        const name = url.split('/').pop() || (isPdf ? 'document.pdf' : 'image')
-        return [{ url, name, contentType }]
-      })
   }, [])
 
   const handleFormSubmit = useCallback(
@@ -1406,26 +1983,7 @@ function PureChatInterfaceComponent({
       setHasUserInitiatedConversation(true)
 
       try {
-        const parts: MutableAppMessage['parts'] = []
-        const linkAttachments = extractLinkAttachments(trimmed)
-        const allAttachments = [...attachments, ...linkAttachments]
-
-        if (allAttachments.length) {
-          parts.push(
-            ...allAttachments.map(att => ({
-              type: 'file' as const,
-              url: att.url,
-              mediaType: att.contentType,
-              ...(att.name ? { filename: att.name } : {}),
-            }))
-          )
-        }
-
-        const finalContent = quotedText 
-          ? `> ${quotedText.replace(/\n/g, '\n> ')}\n\n${trimmed}`
-          : trimmed
-
-        parts.push({ type: 'text', text: finalContent })
+        const parts = buildUserMessageParts(trimmed, attachments, quotedText)
 
         // Clear attachments and input BEFORE sending to prevent them from persisting during navigation
         setAttachments([])
@@ -1449,7 +2007,6 @@ function PureChatInterfaceComponent({
       inputStore,
       setInput,
       quotedText,
-      extractLinkAttachments,
       setShowFullChat,
       showFullChat,
       clearRateLimitError,
@@ -1500,6 +2057,7 @@ function PureChatInterfaceComponent({
     },
     [
       showFullChat,
+      setShowFullChat,
       clearRateLimitError,
       setInput,
       setShowFollowUpSuggestions,
@@ -1510,7 +2068,6 @@ function PureChatInterfaceComponent({
       isGuest,
       guestTotalUserMessages,
       setShowGuestLimitModal,
-      extractLinkAttachments,
     ]
   )
 
@@ -1582,8 +2139,31 @@ function PureChatInterfaceComponent({
   const handleDismissFollowUps = useCallback(() => setShowFollowUpSuggestions(false), [])
   const handleCloseHub = useCallback(() => setHubOpen(false), [])
 
+  // Older history paged in by "show earlier messages". Display-only: it's kept out of `useChat`
+  // state, so what the model sees doesn't depend on how far the user has scrolled back.
+  const [earlierMessages, setEarlierMessages] = useState<LegacyMessage[]>([])
+  const [hasMoreEarlier, setHasMoreEarlier] = useState(hasEarlierMessages)
+  const [loadingEarlier, setLoadingEarlier] = useState(false)
+  const loadEarlierMessages = useCallback(async () => {
+    const oldest = earlierMessages[0] ?? messages[0]
+    if (!oldest) {
+      setHasMoreEarlier(false)
+      return
+    }
+    setLoadingEarlier(true)
+    const page = await loadEarlierHistoryPage(resolvedChatId, oldest.id)
+    if (page) {
+      setEarlierMessages(prev => [...page.messages, ...prev])
+      setHasMoreEarlier(page.hasMore)
+    }
+    setLoadingEarlier(false)
+  }, [earlierMessages, messages, resolvedChatId])
+
   // Messages rendered in the transcript: hide assistant messages that only carry hidden tools.
-  const transcriptMessages = useMemo(() => messages.filter(isTranscriptMessage), [messages])
+  const transcriptMessages = useMemo(
+    () => prependEarlierMessages(earlierMessages, messages).filter(isTranscriptMessage),
+    [earlierMessages, messages]
+  )
   const conversationHistory = useMemo(() => toConversationHistory(messages), [messages])
 
   // Lazy overlays mount on first use and stay mounted so their close animations still play.
@@ -1607,397 +2187,24 @@ function PureChatInterfaceComponent({
     textarea?.focus()
   }, [])
 
-  const handleVTOPCredentials = async (
+  const handleVTOPCredentials = (
     credentials: { username: string; encryptedPassword: string },
     originalToolCall: VtopOriginalToolCall | null | undefined
-  ) => {
-    try {
-      setVtopLoading(true)
-      const originalResult = isRecord(originalToolCall?.result) ? originalToolCall.result : undefined
-      const command = readString(originalToolCall?.args?.command) || readString(originalResult?.command)
-      if (!command) {
-        console.error('No command found in original tool call')
-        setVtopLoading(false)
-        return
-      }
-      const toolCallId = originalToolCall?.toolCallId || Date.now().toString()
-      clearToolResult(toolCallId)
-
-      const updatedMessagesForLoading = messages.map(message => {
-        if (message.toolInvocations) {
-          const updatedToolInvocations = message.toolInvocations.map(
-            (toolInvocation): LegacyToolInvocation => {
-              if (toolInvocation.toolCallId && toolCallId) {
-                return {
-                  ...toolInvocation,
-                  toolCallId: toolCallId,
-                  state: 'call',
-                  result: undefined,
-                }
-              }
-              return toolInvocation
-            }
-          )
-          return {
-            ...message,
-            toolInvocations: updatedToolInvocations,
-          }
-        }
-        return message
-      })
-
-      setUiMessages(prev => {
-        const base = updatedMessagesForLoading.map(legacyToMutableMessage)
-        const last = base.at(-1)
-        if (!last) return base
-        const toolInvocationPayload: LegacyToolInvocation = {
-          toolCallId: toolCallId,
-          toolName: 'queryVTOP',
-          args: { command, username: credentials.username },
-          state: 'call',
-          result: undefined,
-        }
-        if (last.role === 'assistant') {
-          const exists = last.toolInvocations?.some(t => t.toolCallId === toolCallId)
-          if (!exists) {
-            base[base.length - 1] = {
-              ...last,
-              toolInvocations: [...(last.toolInvocations || []), toolInvocationPayload],
-            }
-          } else {
-            base[base.length - 1] = {
-              ...last,
-              toolInvocations: (last.toolInvocations ?? []).map(t =>
-                t.toolCallId === toolCallId ? { ...t, state: 'call', result: undefined } : t
-              ),
-            }
-          }
-        } else {
-          base.push({
-            id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-            role: 'assistant',
-            content: '',
-            parts: [],
-            toolInvocations: [toolInvocationPayload],
-          })
-        }
-        return base
-      })
-
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: legacyMessagesToUiMessages(messages),
-          directToolCall: {
-            toolName: 'queryVTOP',
-            args: {
-              command,
-              username: credentials.username,
-              password: credentials.encryptedPassword,
-              ...originalToolCall?.args,
-            },
-            toolCallId: toolCallId,
-          },
-          id: resolvedChatId,
-        }),
-      })
-
-      if (response.ok) {
-        const responseText = await response.text()
-
-        function parseVTOPResponse(raw: string): unknown {
-          if (!raw || typeof raw !== 'string') {
-            throw new Error('Empty response')
-          }
-
-          const trimmed = raw.trim()
-
-          if (/^[\[{]/.test(trimmed)) {
-            try {
-              const parsedJson: unknown = JSON.parse(trimmed)
-              return parsedJson
-            } catch {
-            }
-          }
-
-          const lines = raw.replace(/\r/g, '').split('\n')
-          const frameHeader = /^([a-z0-9]):(.*)$/i
-
-          type Frame = { prefix: string; payload: string }
-          const frames: Frame[] = []
-
-          let current: Frame | null = null
-
-          const flush = () => {
-            if (current) {
-              current.payload = current.payload.replace(/\n$/, '')
-              frames.push(current)
-              current = null
-            }
-          }
-
-          lines.forEach((line, i) => {
-            // keep exact spacing; payload might be HTML
-            const m = line.match(frameHeader)
-
-            if (m) {
-              flush()
-              const frame: Frame = { prefix: m[1] ?? '', payload: m[2] ?? '' }
-              if (i < lines.length - 1) frame.payload += '\n' // preserve newline after first line
-              current = frame
-            } else {
-              if (current) {
-                current.payload += line + (i < lines.length - 1 ? '\n' : '')
-              } else {
-              }
-            }
-          })
-          flush()
-
-          const safeParseJSON = (s: string): unknown => {
-            const t = s.trim()
-            if (!/^[\[{]/.test(t)) throw new Error('Not JSON')
-            try {
-              const parsedJson: unknown = JSON.parse(t)
-              return parsedJson
-            } catch (_) {
-              const firstBrace = t.indexOf('{')
-              const lastBrace = t.lastIndexOf('}')
-              const firstBracket = t.indexOf('[')
-              const lastBracket = t.lastIndexOf(']')
-              const sliceObject =
-                firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace
-                  ? t.slice(firstBrace, lastBrace + 1)
-                  : null
-              const sliceArray =
-                firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket
-                  ? t.slice(firstBracket, lastBracket + 1)
-                  : null
-              const candidate = sliceObject ?? sliceArray
-              if (!candidate) throw new Error('JSON extract failed')
-              const parsedCandidate: unknown = JSON.parse(candidate)
-              return parsedCandidate
-            }
-          }
-
-          const decodePossibleJSONString = (s: string): string => {
-            const t = s.trim()
-            if (t.startsWith('"') && t.endsWith('"') && !t.includes('\n')) {
-              try {
-                const decoded: unknown = JSON.parse(t) // unescapes \n, \", etc.
-                if (typeof decoded === 'string') return decoded
-              } catch {
-              }
-            }
-            if (t.startsWith('"') && t.endsWith('"')) {
-              return t.slice(1, -1)
-            }
-            return s
-          }
-
-          const toolFrames: unknown[] = []
-          const textChunks: string[] = []
-
-          for (const f of frames) {
-            const payload = f.payload ?? ''
-
-            if (f.prefix === 'a' || f.prefix === '9' || f.prefix === 'e') {
-              const trimmedPayload = payload.trim()
-              try {
-                const parsed = safeParseJSON(trimmedPayload)
-                if (f.prefix === 'a') toolFrames.push(parsed)
-              } catch {
-              }
-            } else if (f.prefix === '0') {
-              textChunks.push(decodePossibleJSONString(payload))
-            } else {
-            }
-          }
-
-          const chosen =
-            [...toolFrames].reverse().find(x => isRecord(x) && 'result' in x) ??
-            [...toolFrames].reverse().find(x => x) // fallback to any 'a' frame
-
-          if (isRecord(chosen) && chosen.result !== undefined) {
-            return { result: chosen.result }
-          }
-          if (chosen) {
-            return { result: chosen } // sometimes the object itself is the result
-          }
-          if (textChunks.length) {
-            return { result: { success: true, output: textChunks.join('\n') } }
-          }
-
-          throw new Error('No parsable tool frames found in streaming response')
-        }
-
-        let parsedResponse: unknown
-        try {
-          parsedResponse = parseVTOPResponse(responseText)
-        } catch (err) {
-          console.error('VTOP parse error. Raw response begins with:', responseText.slice(0, 180))
-          console.error(err)
-          toast.error('Error processing VTOP response. Please try again.')
-          setVtopLoading(false)
-          return
-        }
-        const toolResult: unknown = isRecord(parsedResponse) ? parsedResponse.result : undefined
-        const toolResultRecord = isRecord(toolResult) ? toolResult : undefined
-
-        if (toolCallId) {
-          updateToolResult(toolCallId, command, toolResult)
-        }
-        const updatedMessages = uiMessages.map(message => {
-          if (message.toolInvocations) {
-            const updatedToolInvocations = message.toolInvocations.map(
-              (toolInvocation): LegacyToolInvocation => {
-                if (toolInvocation.toolCallId && toolInvocation.toolCallId === toolCallId) {
-                  return {
-                    ...toolInvocation,
-                    result: toolResult,
-                    state: 'result',
-                  }
-                }
-                return toolInvocation
-              }
-            )
-
-            const updatedParts = message.parts
-              ? message.parts.map(part => {
-                  if (
-                    isLegacyToolInvocationPart(part) &&
-                    part.toolInvocation.toolCallId === toolCallId
-                  ) {
-                    return {
-                      ...part,
-                      toolInvocation: {
-                        ...part.toolInvocation,
-                        result: toolResult,
-                        state: 'result',
-                      },
-                    }
-                  }
-                  return part
-                })
-              : message.parts
-
-            return {
-              ...message,
-              toolInvocations: updatedToolInvocations,
-              parts: updatedParts,
-            }
-          }
-          return message
-        })
-        setUiMessages([...updatedMessages])
-
-        try {
-          const formattedContent =
-            (toolResultRecord &&
-              (readString(toolResultRecord.formatted_content) || readString(toolResultRecord.summary))) ||
-            ''
-          if (formattedContent) {
-            setUiMessages(prev => {
-              const idx = prev.findIndex(
-                m =>
-                  m.role === 'assistant' &&
-                  m.toolInvocations?.some(t => t.toolCallId === toolCallId)
-              )
-              const target = prev[idx]
-              if (idx !== -1 && target) {
-                const clone = prev.map(message => ({ ...message }))
-                const existingContent = target.content || ''
-                if (existingContent.trim() === '') {
-                  clone[idx] = { ...target, content: formattedContent }
-                } else if (!existingContent.includes(formattedContent.slice(0, 30))) {
-                  clone[idx] = {
-                    ...target,
-                    content: `${existingContent}\n\n${formattedContent}`.trim(),
-                  }
-                }
-                return clone
-              }
-              const newAssistantMsg: MutableAppMessage = {
-                id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                role: 'assistant',
-                content: formattedContent,
-                parts: [],
-                toolInvocations: [
-                  {
-                    toolCallId: toolCallId,
-                    toolName: 'queryVTOP',
-                    args: { command },
-                    result: toolResult,
-                    state: 'result',
-                  },
-                ],
-              }
-              return [...prev, newAssistantMsg]
-            })
-            try {
-              setLastAssistantMessage(
-                formattedContent.length > 400 ? formattedContent.slice(0, 400) : formattedContent
-              )
-            } catch {}
-          }
-          if (!showFullChat) setShowFullChat(true)
-          setTimeout(() => {
-            try {
-              const container = contentRef.current?.parentElement
-              if (container) container.scrollTop = container.scrollHeight
-            } catch {}
-          }, 50)
-        } catch (uiUpdateErr) {
-          console.warn('Non-fatal UI update issue after VTOP parse:', uiUpdateErr)
-        }
-
-        if (
-          toolResultRecord &&
-          toolResultRecord.success !== false &&
-          (toolResultRecord.data || toolResultRecord.output)
-        ) {
-          if (chatId) {
-            setTimeout(async () => {
-              try {
-                const refreshResponse = await fetch(`/api/chats/${chatId}`)
-                if (!refreshResponse.ok) {
-                  throw new Error('Failed to refresh conversation after VTOP data retrieval')
-                }
-                const chatData = await readJson(refreshResponse, chatDetailResponseSchema)
-                setUiMessages(legacyMessagesToUiMessages(chatData.messages))
-              } catch (error) {
-                console.warn('Failed to refresh conversation after VTOP data retrieval:', error)
-              }
-            }, 500)
-          }
-        } else if (toolResultRecord && toolResultRecord.success === false) {
-          const errorMessage =
-            readString(toolResultRecord.error) ||
-            readString(toolResultRecord.message) ||
-            'Unknown error occurred'
-          if (
-            errorMessage.includes('Invalid LoginId/Password') ||
-            errorMessage.includes('Login failed')
-          ) {
-            toast.error('Invalid VTOP credentials. Please check your username and password.')
-          }
-        }
-        setVtopLoading(false)
-      } else {
-        const errorText = await response.text()
-        console.error('VTOP API Error:', response.status, errorText)
-        toast.error('Failed to retrieve VTOP data. Please try again.')
-        setVtopLoading(false)
-      }
-    } catch (error) {
-      console.error('Error executing VTOP tool:', error)
-      toast.error('An error occurred while retrieving VTOP data. Please try again.')
-      setVtopLoading(false)
-    }
-  }
+  ) =>
+    submitVtopCredentials(credentials, originalToolCall, {
+      chatId,
+      resolvedChatId,
+      messages,
+      uiMessages,
+      showFullChat,
+      setVtopLoading,
+      setUiMessages,
+      setLastAssistantMessage,
+      setShowFullChat,
+      clearToolResult,
+      updateToolResult,
+      getScrollContainer: () => contentRef.current?.parentElement,
+    })
 
   useEffect(() => {
     if (persistedChatId) {
@@ -2467,6 +2674,9 @@ function PureChatInterfaceComponent({
                   onDismissSuggestions={handleDismissFollowUps}
                   isMobile={isMobile}
                   onQuote={handleQuote}
+                  hasEarlier={hasMoreEarlier}
+                  loadingEarlier={loadingEarlier}
+                  onLoadEarlier={loadEarlierMessages}
                 />
                 <DynamicLoadingIndicator
                   messages={messages}
@@ -2579,7 +2789,7 @@ function PureChatInterfaceComponent({
   }
 
   return (
-    <HubStoreProvider initialState={hubSeed}>
+    <HubStoreProvider initialState={hubStatePromise}>
       {hubLayout}
       {chatgptAnnouncementEligible && <ChatgptConnectAnnouncementModal enabled={!isGuest} />}
       <GuestLimitDialog
@@ -2590,7 +2800,7 @@ function PureChatInterfaceComponent({
       <ShareModal
         open={shareOpen}
         onOpenChange={setShareOpen}
-        chatId={shareableChatId || resolvedChatId || ''}
+        chatId={shareableChatId ?? resolvedChatId}
         title={currentChatTitle}
         previewMessages={messages}
       />
@@ -2601,9 +2811,10 @@ function PureChatInterfaceComponent({
 const PureChatInterface = memo(PureChatInterfaceComponent, (prevProps, nextProps) => {
   return (
     prevProps.chatId === nextProps.chatId &&
+    prevProps.hasEarlierMessages === nextProps.hasEarlierMessages &&
     prevProps.autoResume === nextProps.autoResume &&
     prevProps.chatTitle === nextProps.chatTitle &&
-    prevProps.initialHubState === nextProps.initialHubState &&
+    prevProps.hubState === nextProps.hubState &&
     areHubActionsEqual(prevProps.hubActions, nextProps.hubActions) &&
     prevProps.initialMessages?.length === nextProps.initialMessages?.length &&
     (prevProps.initialMessages?.every(
@@ -2616,9 +2827,10 @@ const PureChatInterface = memo(PureChatInterfaceComponent, (prevProps, nextProps
 export const ChatInterface = memo(
   ({
     initialMessages = [],
+    hasEarlierMessages,
     chatId,
     autoResume = true,
-    initialHubState,
+    hubState,
     hubActions,
     chatTitle,
   }: ChatInterfaceProps) => {
@@ -2627,9 +2839,10 @@ export const ChatInterface = memo(
         <VTOPProvider>
           <PureChatInterface
             initialMessages={initialMessages}
+            hasEarlierMessages={hasEarlierMessages}
             chatId={chatId}
             autoResume={autoResume}
-            initialHubState={initialHubState}
+            hubState={hubState}
             hubActions={hubActions}
             chatTitle={chatTitle}
           />
@@ -2640,9 +2853,10 @@ export const ChatInterface = memo(
   (prevProps, nextProps) => {
     return (
       prevProps.chatId === nextProps.chatId &&
+      prevProps.hasEarlierMessages === nextProps.hasEarlierMessages &&
       prevProps.autoResume === nextProps.autoResume &&
       prevProps.chatTitle === nextProps.chatTitle &&
-      prevProps.initialHubState === nextProps.initialHubState &&
+      prevProps.hubState === nextProps.hubState &&
       areHubActionsEqual(prevProps.hubActions, nextProps.hubActions) &&
       prevProps.initialMessages?.length === nextProps.initialMessages?.length &&
       (prevProps.initialMessages?.every(

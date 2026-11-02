@@ -583,44 +583,79 @@ const messageSelect = {
   created_at: true,
 } as const
 
-export type GetMessagesOptions = {
-  /**
-   * Only the most recent `limit` messages (still returned oldest-first). Uses the
-   * `(chatId, created_at)` index; omit for the full history.
-   */
-  limit?: number
-}
+/** DB row -> `Message` (raw tool-invocation JSON is sanitized and not carried along). */
+const toMessage = ({
+  tool_invocations,
+  attachments,
+  role,
+  ...rest
+}: Prisma.MessageGetPayload<{ select: typeof messageSelect }>): Message => ({
+  ...rest,
+  role: toMessageRole(role),
+  toolInvocations: readToolInvocations(tool_invocations),
+  attachments: readAttachments(attachments),
+})
 
-export async function getMessages(
-  chatId: string,
-  options: GetMessagesOptions = {}
-): Promise<Message[]> {
+/** Every message of a chat, oldest first. */
+export async function getMessages(chatId: string): Promise<Message[]> {
   try {
-    const { limit } = options
-    const messages =
-      limit !== undefined && limit > 0
-        ? (
-            await prisma.message.findMany({
-              where: { chatId },
-              orderBy: { created_at: 'desc' },
-              take: limit,
-              select: messageSelect,
-            })
-          ).reverse()
-        : await prisma.message.findMany({
-            where: { chatId },
-            orderBy: { created_at: 'asc' },
-            select: messageSelect,
-          })
-    return messages.map(msg => ({
-      ...msg,
-      role: toMessageRole(msg.role),
-      toolInvocations: readToolInvocations(msg.tool_invocations),
-      attachments: readAttachments(msg.attachments),
-    }))
+    const messages = await prisma.message.findMany({
+      where: { chatId },
+      orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+      select: messageSelect,
+    })
+    return messages.map(toMessage)
   } catch (error) {
     console.error('Error getting messages:', error)
     return []
+  }
+}
+
+export type MessagesPage = {
+  /** Oldest first. */
+  messages: Message[]
+  /** Whether the chat has messages older than `messages[0]`. */
+  hasMore: boolean
+}
+
+/**
+ * The newest `limit` messages of a chat — or, with `before` (a message id of this chat), the
+ * newest `limit` messages older than that one — returned oldest first. Ordered by
+ * `(created_at, id)` so pages never overlap or skip rows that share a timestamp; reads use the
+ * `(chatId, created_at)` index. An unknown `before` id yields an empty page.
+ */
+export async function getMessagesPage(
+  chatId: string,
+  { limit, before }: { limit: number; before?: string }
+): Promise<MessagesPage> {
+  try {
+    let olderThan: Prisma.MessageWhereInput = {}
+    if (before) {
+      const cursor = await prisma.message.findFirst({
+        where: { id: before, chatId },
+        select: { id: true, created_at: true },
+      })
+      if (!cursor) return { messages: [], hasMore: false }
+      olderThan = {
+        OR: [
+          { created_at: { lt: cursor.created_at } },
+          { created_at: cursor.created_at, id: { lt: cursor.id } },
+        ],
+      }
+    }
+    // One extra row tells whether anything older remains.
+    const rows = await prisma.message.findMany({
+      where: { chatId, ...olderThan },
+      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      select: messageSelect,
+    })
+    const hasMore = rows.length > limit
+    const page = hasMore ? rows.slice(0, limit) : rows
+    return { messages: page.reverse().map(toMessage), hasMore }
+  } catch (error) {
+    console.error('Error getting messages page:', error)
+    return { messages: [], hasMore: false }
   }
 }
 
@@ -666,14 +701,7 @@ export async function getLatestMessage(chatId: string): Promise<Message | null> 
     orderBy: { created_at: 'desc' },
     select: messageSelect,
   })
-  return message
-    ? {
-        ...message,
-        role: toMessageRole(message.role),
-        toolInvocations: readToolInvocations(message.tool_invocations),
-        attachments: readAttachments(message.attachments),
-      }
-    : null
+  return message ? toMessage(message) : null
 }
 
 export async function createChatFromMessages(

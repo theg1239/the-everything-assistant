@@ -1,8 +1,7 @@
 'use client'
 
-import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { createStore, type StoreApi } from 'zustand/vanilla'
-import { useStore } from 'zustand'
 import { useStoreWithEqualityFn } from 'zustand/traditional'
 import type { PersonalHubState, HubVTOPCommand, PersonalHubSnapshot } from '@/types/hub'
 import type {
@@ -30,6 +29,8 @@ export type DailyHydrationState = {
 type HubStoreState = {
   page: HubPage
   hubState: PersonalHubState
+  /** False until the server's hub state (streamed to the provider) has been applied. */
+  hubStateReady: boolean
   viewerOpen: boolean
   viewerTitle: string
   viewerData: PersonalHubSnapshot | null
@@ -71,10 +72,14 @@ const stripActions = (state: HubStore): HubStoreState => {
   return rest
 }
 
-export const createHubStore = (initialHubState: PersonalHubState): StoreApi<HubStore> =>
-  createStore<HubStore>()((set, get) => ({
+export const createHubStore = (
+  initialHubState: PersonalHubState,
+  hubStateReady = true
+): StoreApi<HubStore> =>
+  createStore<HubStore>()(set => ({
     page: 'briefing',
     hubState: initialHubState,
+    hubStateReady,
     viewerOpen: false,
     viewerTitle: 'result',
     viewerData: null,
@@ -116,25 +121,59 @@ export const createHubStore = (initialHubState: PersonalHubState): StoreApi<HubS
     },
   }))
 
+const EMPTY_HUB_STATE: PersonalHubState = { isLinked: false, snapshots: [], lastSyncedAt: null }
+
+type SeededHubStore = {
+  store: StoreApi<HubStore>
+  /** The promise the store was seeded from. */
+  source: Promise<PersonalHubState>
+}
+
+/**
+ * A store that starts empty (`hubStateReady: false`) and is seeded when `source` resolves. A
+ * rejected source leaves the empty state in place (marked ready, i.e. shown as "not linked").
+ */
+const createSeededHubStore = (source: Promise<PersonalHubState>): SeededHubStore => {
+  const store = createHubStore(EMPTY_HUB_STATE, false)
+  source.then(
+    hubState => store.setState({ hubState, hubStateReady: true }),
+    () => store.setState({ hubStateReady: true })
+  )
+  return { store, source }
+}
+
 const HubStoreContext = createContext<StoreApi<HubStore> | null>(null)
 
+/**
+ * Provides the hub store. `initialState` is a promise so pages can stream the hub state instead of
+ * blocking render on it (the hub drawer is closed by default): consumers check `hubStateReady`
+ * before showing hub data. A new promise (e.g. after a server re-render) replaces the hub state
+ * once it resolves.
+ */
 export function HubStoreProvider({
   children,
   initialState,
 }: {
   children: ReactNode
-  initialState: PersonalHubState
+  initialState: Promise<PersonalHubState>
 }) {
-  const storeRef = useRef<StoreApi<HubStore> | null>(null)
-  if (!storeRef.current) {
-    storeRef.current = createHubStore(initialState)
-  }
+  const [{ store, source }] = useState(() => createSeededHubStore(initialState))
 
   useEffect(() => {
-    storeRef.current?.getState().setHubState(initialState)
-  }, [initialState])
+    if (initialState === source) return
+    let cancelled = false
+    initialState.then(
+      hubState => {
+        if (!cancelled) store.setState({ hubState, hubStateReady: true })
+      },
+      () => undefined
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [initialState, source, store])
 
-  return <HubStoreContext.Provider value={storeRef.current}>{children}</HubStoreContext.Provider>
+  return <HubStoreContext.Provider value={store}>{children}</HubStoreContext.Provider>
 }
 
 export function useHubStore<T>(
@@ -145,8 +184,6 @@ export function useHubStore<T>(
   if (!store) {
     throw new Error('useHubStore must be used within a HubStoreProvider')
   }
-  if (equalityFn) {
-    return useStoreWithEqualityFn(store, selector, equalityFn)
-  }
-  return useStore(store, selector)
+  // Without an equality function this compares with Object.is, like zustand's `useStore`.
+  return useStoreWithEqualityFn(store, selector, equalityFn)
 }

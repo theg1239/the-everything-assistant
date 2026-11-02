@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
-import { getChat, getMessages } from '@/lib/db'
+import { getChat, getMessagesPage } from '@/lib/db'
+import { CHAT_HISTORY_PAGE_SIZE, toClientMessage } from '@/lib/chat-history'
 import { ChatInterface } from '@/components/chat-interface'
 import {
   loadPersonalHubState,
@@ -24,12 +25,14 @@ export default async function ChatPage({ params }: ChatPageProps) {
   }
 
   const fallbackHubState: PersonalHubState = { isLinked: false, snapshots: [], lastSyncedAt: null }
-  // Ownership check, messages and hub state are independent reads: run them together.
-  // Messages are only rendered once `getChat` has confirmed the chat belongs to the user.
-  const [chat, messages, initialHubState] = await Promise.all([
+  // Streamed, not awaited: the hub drawer is closed by default and waits for this itself.
+  const hubState = loadPersonalHubState().catch(() => fallbackHubState)
+  // Ownership check and the newest page of messages are independent reads: run them together.
+  // Messages are only rendered once `getChat` has confirmed the chat belongs to the user. Older
+  // history is fetched on demand ("show earlier messages").
+  const [chat, history] = await Promise.all([
     getChat(id, session.user.id),
-    getMessages(id),
-    loadPersonalHubState().catch(() => fallbackHubState),
+    getMessagesPage(id, { limit: CHAT_HISTORY_PAGE_SIZE }),
   ])
 
   if (!chat) {
@@ -40,19 +43,13 @@ export default async function ChatPage({ params }: ChatPageProps) {
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex flex-1 flex-col overflow-hidden">
           <ChatInterface
-            initialMessages={messages.map(msg => ({
-              id: msg.id,
-              role: msg.role,
-              content: msg.content,
-              toolInvocations: msg.toolInvocations,
-              attachments: msg.attachments,
-              createdAt: msg.created_at,
-            }))}
+            initialMessages={history.messages.map(toClientMessage)}
+            hasEarlierMessages={history.hasMore}
             chatId={id}
             key={id}
             autoResume={false}
             chatTitle={chat.title}
-            initialHubState={initialHubState}
+            hubState={hubState}
             hubActions={{
               refreshState: loadPersonalHubState,
               syncCore: syncCoreHubSnapshots,

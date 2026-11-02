@@ -1,6 +1,6 @@
 /**
- * Instant navigation/prefetch boundary for /chat/[id]: shown while the chat,
- * its messages and hub state load. Mirrors ChatInterface's message column
+ * Instant navigation/prefetch boundary for /chat/[id]: shown while the chat and its newest
+ * messages load (hub state streams in afterwards). Mirrors ChatInterface's message column
  * (max-w-3xl, alternating user/assistant bubbles) and bottom composer.
  */
 export default function ChatLoading() {

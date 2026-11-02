@@ -4,14 +4,25 @@ import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import type { Prisma } from '@/prisma/generated/client'
 import {
-  verifyTOTP,
+  matchTOTP,
   hashBackupCodes,
   generateBackupCodes,
+  getMfaPepper,
   logSecurityEvent,
-  checkRateLimit,
 } from '@/lib/mfa'
+import { claimTotpTimeStep, type MfaFactor } from '@/lib/mfa-state'
+import {
+  getMfaKv,
+  limitVerificationAttempt,
+  mfaUnavailableResponse,
+  recordCurrentSessionVerification,
+} from '@/lib/session'
 import { mfaVerificationSchema } from '@/types/api/mfa'
 
+/**
+ * Completes MFA enrolment (email / authenticator) for a user without MFA. Proving the new
+ * factor also marks the current session MFA-verified, so the user isn't challenged right away.
+ */
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()
@@ -37,15 +48,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Verification code is required' }, { status: 400 })
     }
 
-    const rateLimitKey = `mfa-verify-${session.user.email}`
-    if (!checkRateLimit(rateLimitKey, 5, 15 * 60 * 1000)) {
-      return NextResponse.json(
-        { error: 'Too many verification attempts. Please try again later.' },
-        { status: 429 }
-      )
-    }
+    const kv = getMfaKv()
+    if (!kv) return mfaUnavailableResponse()
+
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { id: session.user.id },
       select: {
         id: true,
         email: true,
@@ -59,6 +66,14 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
+    // Enrolment only: switching methods goes through PATCH /api/user/mfa/method (step-up).
+    if (user.mfaEnabled) {
+      return NextResponse.json({ error: 'MFA already enabled' }, { status: 400 })
+    }
+
+    const limited = await limitVerificationAttempt(kv, user.id, request)
+    if (limited) return limited
+
     if (!user.tempMfaSecret) {
       return NextResponse.json(
         { error: 'No MFA setup in progress. Please start setup first.' },
@@ -83,7 +98,14 @@ export async function POST(request: NextRequest) {
     if (user.tempMfaMethod === 'email') {
       isValidCode = code !== undefined && (await bcrypt.compare(code, tempSecret))
     } else if (user.tempMfaMethod === 'authenticator') {
-      isValidCode = code !== undefined && verifyTOTP(code, tempSecret)
+      const match = code === undefined ? null : matchTOTP(code, tempSecret)
+      isValidCode =
+        match !== null &&
+        (await claimTotpTimeStep(kv, {
+          userId: user.id,
+          secret: tempSecret,
+          timeStep: match.timeStep,
+        }))
     } else if (user.tempMfaMethod === 'security_key') {
       return NextResponse.json(
         { error: 'Please use the WebAuthn verification endpoint for security keys' },
@@ -105,7 +127,7 @@ export async function POST(request: NextRequest) {
     }
 
     const backupCodes = generateBackupCodes()
-    const hashedBackupCodes = hashBackupCodes(backupCodes)
+    const hashedBackupCodes = hashBackupCodes(backupCodes, getMfaPepper())
     const updateData: Prisma.UserUpdateInput = {
       mfaEnabled: true,
       mfaMethod: user.tempMfaMethod,
@@ -120,6 +142,18 @@ export async function POST(request: NextRequest) {
       where: { id: user.id },
       data: updateData,
     })
+
+    const factor: MfaFactor = user.tempMfaMethod === 'email' ? 'email' : 'authenticator'
+    try {
+      await recordCurrentSessionVerification({
+        userId: user.id,
+        factor,
+        sessionExpires: session.expires,
+      })
+    } catch (error) {
+      // MFA is on; the user will simply be challenged on their next request.
+      console.error('[mfa] failed to record verification after enrolment', error)
+    }
 
     await logSecurityEvent(user.id, 'MFA_ENABLED', { method: user.tempMfaMethod }, request)
 

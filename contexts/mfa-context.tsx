@@ -1,100 +1,111 @@
 'use client'
 
-import React, { createContext, useContext, useSyncExternalStore } from 'react'
+import React, { createContext, useContext, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { useSession } from 'next-auth/react'
-import { usePathname } from 'next/navigation'
-import { isRecord } from '@/lib/json'
+import { usePathname, useRouter } from 'next/navigation'
+import { isMfaStepUpRequired } from '@/types/api/mfa'
 
 interface MFAContextType {
-  isMFAVerified: boolean
-  setMFAVerified: (verified: boolean) => void
+  /** The signed-in user has MFA enabled. */
   requiresMFA: boolean
-  isCheckingMFA: boolean
+  /** This session passed MFA server-side (or MFA isn't required). */
+  isMFAVerified: boolean
+  /**
+   * Call after the MFA challenge succeeded (the server has recorded it): refreshes the
+   * session and re-renders server components.
+   */
+  completeVerification: () => Promise<void>
+  /**
+   * Shows the MFA challenge as a dialog for a step-up (sensitive change). Resolves `true` once
+   * verified, `false` if the user cancels. Resolves `true` immediately without MFA.
+   */
+  requestStepUp: () => Promise<boolean>
+  /**
+   * `fetch` that handles `403 { error: 'MFA_STEP_UP_REQUIRED' }`: prompts for MFA and retries
+   * once. If the user cancels, the original 403 response is returned.
+   */
+  fetchWithStepUp: (input: string | URL, init?: RequestInit) => Promise<Response>
 }
 
 const MFAContext = createContext<MFAContextType | undefined>(undefined)
 
-/*
- * Per-tab MFA verification lives in sessionStorage, which the server cannot see.
- * It is read through `useSyncExternalStore` so SSR/hydration use the server
- * snapshot (`null` = unknown) and the client re-renders with the real value
- * right after hydration. Only users with MFA enabled ever hit the unknown state;
- * everyone else is resolved from the (server-seeded) session on the first render.
+// Only loaded when a step-up is actually requested.
+const MfaStepUpDialog = dynamic(
+  () => import('@/components/mfa-challenge').then(mod => mod.MfaStepUpDialog),
+  { ssr: false }
+)
+
+/**
+ * MFA state comes from the server: the session callback exposes `mfaRequired`/`mfaVerified`
+ * (backed by a per-session server-side record), and `auth()` rejects unverified sessions, so
+ * nothing here is trusted for access control; it only decides what to render.
  */
-const storageListeners = new Set<() => void>()
-
-const subscribeToStorage = (listener: () => void) => {
-  storageListeners.add(listener)
-  return () => {
-    storageListeners.delete(listener)
-  }
-}
-
-const notifyStorageListeners = () => {
-  for (const listener of storageListeners) listener()
-}
-
-const storageKey = (userId: string) => `mfa_verified_${userId}`
-
-const readStoredVerification = (userId: string): boolean => {
-  try {
-    const raw = sessionStorage.getItem(storageKey(userId))
-    if (!raw) return false
-    const data: unknown = JSON.parse(raw)
-    return isRecord(data) && Boolean(data.verified)
-  } catch {
-    return false
-  }
-}
-
-const getServerVerificationSnapshot = (): boolean | null => null
-
 export function MFAProvider({ children }: { children: React.ReactNode }) {
-  const { data: session, status } = useSession()
+  const { data: session, update } = useSession()
+  const router = useRouter()
   const pathname = usePathname()
+  const [stepUpOpen, setStepUpOpen] = useState(false)
+  const pendingStepUps = useRef<Array<(verified: boolean) => void>>([])
 
-  const userId = session?.user?.id
-  const requiresMFA = session?.requiresMFA || false
-  const onLoginPage = pathname === '/login'
-
-  const storedVerification = useSyncExternalStore<boolean | null>(
-    subscribeToStorage,
-    () => (userId && requiresMFA ? readStoredVerification(userId) : false),
-    getServerVerificationSnapshot
-  )
-
-  const needsVerificationLookup = Boolean(userId) && requiresMFA && !onLoginPage
-  const isCheckingMFA =
-    status === 'loading' || (needsVerificationLookup && storedVerification === null)
+  const requiresMFA = session?.user?.mfaRequired === true
   const isMFAVerified =
-    Boolean(userId) && (!requiresMFA || onLoginPage || storedVerification === true)
+    Boolean(session?.user) && (!requiresMFA || session?.user?.mfaVerified === true)
 
-  const setMFAVerified = (verified: boolean) => {
-    if (!userId) return
-    if (verified) {
-      sessionStorage.setItem(
-        storageKey(userId),
-        JSON.stringify({
-          verified: true,
-          sessionId: userId,
-        })
-      )
+  const completeVerification = async () => {
+    await update()
+    if (pathname === '/login') {
+      router.replace('/')
     } else {
-      sessionStorage.removeItem(storageKey(userId))
+      router.refresh()
     }
-    notifyStorageListeners()
+  }
+
+  const settleStepUp = (verified: boolean) => {
+    setStepUpOpen(false)
+    const waiting = pendingStepUps.current
+    pendingStepUps.current = []
+    for (const resolve of waiting) resolve(verified)
+  }
+
+  const requestStepUp = () => {
+    if (!requiresMFA) return Promise.resolve(true)
+    return new Promise<boolean>(resolve => {
+      pendingStepUps.current.push(resolve)
+      setStepUpOpen(true)
+    })
+  }
+
+  // Takes a URL (not a `Request`) so the retry can resend the same `init`.
+  const fetchWithStepUp = async (input: string | URL, init?: RequestInit) => {
+    const response = await fetch(input, init)
+    if (response.status !== 403) return response
+    const body: unknown = await response
+      .clone()
+      .json()
+      .catch(() => null)
+    if (!isMfaStepUpRequired(body)) return response
+    if (!(await requestStepUp())) return response
+    return fetch(input, init)
   }
 
   return (
     <MFAContext.Provider
       value={{
-        isMFAVerified,
-        setMFAVerified,
         requiresMFA,
-        isCheckingMFA,
+        isMFAVerified,
+        completeVerification,
+        requestStepUp,
+        fetchWithStepUp,
       }}
     >
       {children}
+      {stepUpOpen && (
+        <MfaStepUpDialog
+          onVerified={() => settleStepUp(true)}
+          onCancel={() => settleStepUp(false)}
+        />
+      )}
     </MFAContext.Provider>
   )
 }

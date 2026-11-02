@@ -2,17 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { isSMTPConfigured } from '@/lib/env-config'
-import { generateTOTPSecret, generateTOTPUri } from '@/lib/mfa'
+import { generateEmailCode, generateTOTPSecret, generateTOTPUri } from '@/lib/mfa'
 import QRCode from 'qrcode'
-import crypto from 'crypto'
 import nodemailer from 'nodemailer'
 import bcrypt from 'bcryptjs'
 import { mfaSetupRequestSchema } from '@/types/api/mfa'
 
 const createEmailTransporter = () => {
-  console.log('SMTP_EMAIL exists:', !!process.env.SMTP_EMAIL)
-  console.log('SMTP_APP_PASSWORD exists:', !!process.env.SMTP_APP_PASSWORD)
-
   if (!process.env.SMTP_EMAIL || !process.env.SMTP_APP_PASSWORD) {
     throw new Error('Missing SMTP credentials in environment variables')
   }
@@ -23,8 +19,9 @@ const createEmailTransporter = () => {
       user: process.env.SMTP_EMAIL,
       pass: process.env.SMTP_APP_PASSWORD,
     },
-    debug: true,
-    logger: true,
+    // Nodemailer's debug logger prints message bodies (i.e. the verification code): dev only.
+    debug: process.env.NODE_ENV === 'development',
+    logger: process.env.NODE_ENV === 'development',
   })
 }
 
@@ -72,7 +69,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'User email not found' }, { status: 400 })
       }
 
-      const verificationCode = crypto.randomInt(100000, 999999).toString()
+      const verificationCode = generateEmailCode()
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
 
       const hashedCode = await bcrypt.hash(verificationCode, 12)
@@ -90,7 +87,6 @@ export async function POST(request: NextRequest) {
         const transporter = createEmailTransporter()
 
         await transporter.verify()
-        console.log('SMTP connection verified successfully')
 
         const mailOptions = {
           from: `"The Everything Assistant" <${process.env.SMTP_EMAIL}>`,
@@ -121,8 +117,7 @@ export async function POST(request: NextRequest) {
           `,
         }
 
-        const result = await transporter.sendMail(mailOptions)
-        console.log('Email sent successfully:', result.messageId)
+        await transporter.sendMail(mailOptions)
 
         return NextResponse.json({
           success: true,

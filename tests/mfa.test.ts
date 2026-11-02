@@ -3,10 +3,14 @@ import { createHash } from 'node:crypto'
 import test, { mock } from 'node:test'
 import { createGuardrails, generateSync } from 'otplib'
 import {
+  findBackupCode,
   generateBackupCodes,
+  generateEmailCode,
   generateTOTPSecret,
+  hashBackupCode,
   hashBackupCodes,
-  verifyBackupCode,
+  isLegacyBackupCodeHash,
+  matchTOTP,
   verifyTOTP,
 } from '../lib/mfa'
 
@@ -146,29 +150,84 @@ test('generateBackupCodes returns the requested number of 8-char uppercase hex c
   assert.equal(new Set(codes).size, codes.length, 'codes should be unique')
 })
 
-test('backup code hashing and verification round-trip', () => {
+const PEPPER = 'test-pepper-0123456789'
+
+test('backup codes are stored as peppered HMACs and verify case-insensitively', () => {
   const codes = generateBackupCodes(5)
-  const hashed = hashBackupCodes(codes)
+  const hashed = hashBackupCodes(codes, PEPPER)
 
   assert.equal(hashed.length, codes.length)
   for (const [index, hash] of hashed.entries()) {
-    assert.match(hash, /^[0-9a-f]{64}$/)
-    assert.notEqual(hash, codes[index], 'codes must not be stored in plain text')
-    assert.equal(
-      hash,
+    assert.match(hash, /^hmac1\$[0-9a-f]{64}$/)
+    assert.equal(isLegacyBackupCodeHash(hash), false)
+    assert.ok(!hash.includes(codes[index] ?? '?'), 'codes must not be stored in plain text')
+    assert.notEqual(
+      hash.slice('hmac1$'.length),
       createHash('sha256')
         .update(codes[index] ?? '')
-        .digest('hex')
+        .digest('hex'),
+      'peppered hash must differ from a bare SHA-256'
     )
   }
 
-  for (const code of codes) {
-    assert.equal(verifyBackupCode(code, hashed), true)
-    // Users may type the code in lower case.
-    assert.equal(verifyBackupCode(code.toLowerCase(), hashed), true)
+  for (const [index, code] of codes.entries()) {
+    assert.deepEqual(findBackupCode(code, hashed, PEPPER), { index, legacy: false })
+    // Users may type the code in lower case or with spaces/dashes.
+    assert.deepEqual(findBackupCode(code.toLowerCase(), hashed, PEPPER), { index, legacy: false })
+    assert.deepEqual(findBackupCode(`${code.slice(0, 4)}-${code.slice(4)} `, hashed, PEPPER), {
+      index,
+      legacy: false,
+    })
   }
 
-  assert.equal(verifyBackupCode('00000000', hashed), false)
-  assert.equal(verifyBackupCode('', hashed), false)
-  assert.equal(verifyBackupCode(codes[0] ?? '', []), false)
+  assert.equal(findBackupCode('00000000', hashed, PEPPER), null)
+  assert.equal(findBackupCode('', hashed, PEPPER), null)
+  assert.equal(findBackupCode(codes[0] ?? '', [], PEPPER), null)
+})
+
+test('backup codes hashed with a different pepper do not verify', () => {
+  const [code = ''] = generateBackupCodes(1)
+  const hashed = hashBackupCodes([code], PEPPER)
+  assert.equal(findBackupCode(code, hashed, 'another-pepper'), null)
+  assert.notEqual(hashBackupCode(code, PEPPER), hashBackupCode(code, 'another-pepper'))
+})
+
+test('legacy unpeppered SHA-256 backup codes still verify and are flagged for retirement', () => {
+  const codes = generateBackupCodes(3)
+  const legacy = codes.map(code => createHash('sha256').update(code).digest('hex'))
+  const mixed = [...legacy.slice(0, 2), ...hashBackupCodes([codes[2] ?? ''], PEPPER)]
+
+  assert.equal(isLegacyBackupCodeHash(mixed[0] ?? ''), true)
+  assert.deepEqual(findBackupCode(codes[0] ?? '', mixed, PEPPER), { index: 0, legacy: true })
+  assert.deepEqual(findBackupCode((codes[1] ?? '').toLowerCase(), mixed, PEPPER), {
+    index: 1,
+    legacy: true,
+  })
+  assert.deepEqual(findBackupCode(codes[2] ?? '', mixed, PEPPER), { index: 2, legacy: false })
+  // A legacy hash can't be matched by presenting the hash itself as the code.
+  assert.equal(findBackupCode(legacy[0] ?? '', mixed, PEPPER), null)
+})
+
+test('matchTOTP reports the matched time step', () => {
+  const secret = generateTOTPSecret()
+  const currentStep = Math.floor(NOW_SECONDS / PERIOD)
+  for (const offset of [-1, 0, 1]) {
+    const code = codeAt(secret, NOW_SECONDS + offset * PERIOD)
+    if (offset !== 0 && code === codeAt(secret, NOW_SECONDS)) continue
+    assert.deepEqual(
+      atTime(NOW_SECONDS, () => matchTOTP(code, secret)),
+      { timeStep: currentStep + offset },
+      `offset ${offset}`
+    )
+  }
+  assert.equal(
+    atTime(NOW_SECONDS, () => matchTOTP('000000', 'not base32!')),
+    null
+  )
+})
+
+test('generateEmailCode returns 6-digit codes from the CSPRNG', () => {
+  const codes = Array.from({ length: 200 }, () => generateEmailCode())
+  for (const code of codes) assert.match(code, /^[1-9]\d{5}$/)
+  assert.ok(new Set(codes).size > 190, 'codes should not repeat much')
 })

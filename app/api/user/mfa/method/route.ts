@@ -5,14 +5,25 @@ import bcrypt from 'bcryptjs'
 import {
   generateTOTPSecret,
   generateQRCode,
-  verifyTOTP,
+  matchTOTP,
   generateEmailCode,
   sendEmailCode,
-  checkRateLimit,
   logSecurityEvent,
 } from '@/lib/mfa'
+import { claimTotpTimeStep, consumeRateLimit } from '@/lib/mfa-state'
+import {
+  getMfaKv,
+  hasFreshMfa,
+  limitVerificationAttempt,
+  mfaStepUpRequiredResponse,
+  mfaUnavailableResponse,
+} from '@/lib/session'
 import { mfaMethodChangeSchema } from '@/types/api/mfa'
 
+/**
+ * Switches the MFA method (two steps; see `mfaMethodChangeResponseSchema`). Both steps require
+ * a recent MFA verification (step-up).
+ */
 export async function PATCH(request: NextRequest) {
   try {
     const session = await auth()
@@ -32,16 +43,8 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid method' }, { status: 400 })
     }
 
-    const rateLimitKey = `mfa-method-${session.user.email}`
-    if (!checkRateLimit(rateLimitKey, 5, 15 * 60 * 1000)) {
-      return NextResponse.json(
-        { error: 'Too many attempts. Please try again later.' },
-        { status: 429 }
-      )
-    }
-
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { id: session.user.id },
       select: {
         id: true,
         email: true,
@@ -66,7 +69,17 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Already using this method' }, { status: 400 })
     }
 
+    if (!(await hasFreshMfa({ userId: user.id, mfaEnabled: user.mfaEnabled }))) {
+      return mfaStepUpRequiredResponse()
+    }
+
+    const kv = getMfaKv()
+    if (!kv) return mfaUnavailableResponse()
+
     if (verificationCode) {
+      const limited = await limitVerificationAttempt(kv, user.id, request)
+      if (limited) return limited
+
       if (!user.tempMfaSecret || !user.tempMfaExpires || user.tempMfaMethod !== newMethod) {
         return NextResponse.json({ error: 'No pending method change found' }, { status: 400 })
       }
@@ -80,7 +93,14 @@ export async function PATCH(request: NextRequest) {
       if (newMethod === 'email') {
         isValidCode = await bcrypt.compare(verificationCode, user.tempMfaSecret)
       } else if (newMethod === 'authenticator') {
-        isValidCode = verifyTOTP(verificationCode, user.tempMfaSecret)
+        const match = matchTOTP(verificationCode, user.tempMfaSecret)
+        isValidCode =
+          match !== null &&
+          (await claimTotpTimeStep(kv, {
+            userId: user.id,
+            secret: user.tempMfaSecret,
+            timeStep: match.timeStep,
+          }))
       } else if (newMethod === 'security_key') {
         return NextResponse.json(
           { error: 'WebAuthn verification should be handled separately' },
@@ -126,6 +146,15 @@ export async function PATCH(request: NextRequest) {
         success: true,
         message: `MFA method changed to ${newMethod}`,
       })
+    }
+
+    if (
+      !(await consumeRateLimit(kv, `method-start:${user.id}`, { max: 5, windowSeconds: 15 * 60 }))
+    ) {
+      return NextResponse.json(
+        { error: 'Too many attempts. Please try again later.' },
+        { status: 429 }
+      )
     }
 
     if (newMethod === 'email') {

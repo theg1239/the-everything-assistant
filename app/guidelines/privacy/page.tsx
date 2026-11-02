@@ -31,7 +31,11 @@ export default function PrivacyPolicyPage() {
           <h2 className="text-xl font-semibold mb-2">3. Data Collection</h2>
           <ul className="list-disc list-inside ml-6">
             <li>Session data and anonymous analytics to improve service quality.</li>
-            <li>Credentials (e.g., VTOP login) used in-session only, not stored thereafter.</li>
+            <li>
+              VTOP credentials you link are stored encrypted (AES-256-GCM), tied to your account, used
+              only to fetch your VTOP data on request, and deleted when you unlink them or delete your
+              account.
+            </li>
           </ul>
         </section>
 

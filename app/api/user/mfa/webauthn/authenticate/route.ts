@@ -1,230 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
-import { logSecurityEvent } from '@/lib/mfa'
-import {
-  generateAuthenticationOptions,
-  verifyAuthenticationResponse,
-  type VerifyAuthenticationResponseOpts,
-  type AuthenticatorTransport,
-} from '@simplewebauthn/server'
-import {
-  webAuthnAuthenticationCredentialSchema,
-  type WebAuthnAuthenticationCredential,
-} from '@/types/api/mfa'
+import { handleWebAuthnAssertion, handleWebAuthnAssertionOptions } from '@/lib/mfa-challenge'
+import { isRecord } from '@/lib/json'
+import { webAuthnAuthenticationCredentialSchema } from '@/types/api/mfa'
 
-const VALID_TRANSPORTS: AuthenticatorTransport[] = ['usb', 'nfc', 'ble', 'hybrid', 'internal']
-const VALID_TRANSPORT_SET: ReadonlySet<string> = new Set(VALID_TRANSPORTS)
-
-function isAuthenticatorTransport(transport: string): transport is AuthenticatorTransport {
-  return VALID_TRANSPORT_SET.has(transport)
-}
-
+/**
+ * Without a body (or without `credential`): assertion options for the MFA challenge.
+ * With `{ credential }`: verifies it, like `POST /api/user/mfa/webauthn/verify-auth`.
+ */
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth()
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    let requestBody: unknown = {}
-    try {
-      const text = await request.text()
-      if (text.trim()) {
-        requestBody = JSON.parse(text)
+    const text = await request.text()
+    let body: unknown = null
+    if (text.trim()) {
+      try {
+        body = JSON.parse(text)
+      } catch {
+        return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
       }
-    } catch (parseError) {
     }
 
-    const rawCredential =
-      typeof requestBody === 'object' && requestBody !== null && 'credential' in requestBody
-        ? requestBody.credential
-        : undefined
-
-    if (!rawCredential) {
-      return await generateAuthOptions(session.user.email)
+    const rawCredential = isRecord(body) ? body.credential : undefined
+    if (rawCredential === undefined) {
+      return await handleWebAuthnAssertionOptions()
     }
 
     const parsedCredential = webAuthnAuthenticationCredentialSchema.safeParse(rawCredential)
     if (!parsedCredential.success) {
       return NextResponse.json({ error: 'Invalid credential' }, { status: 400 })
     }
-
-    return await verifyAuthCredential(parsedCredential.data, session.user.email, request)
-  } catch (err) {
-    console.error('🔐 WebAuthn authentication error:', err)
+    return await handleWebAuthnAssertion(request, parsedCredential.data)
+  } catch (error) {
+    console.error('WebAuthn authentication error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
-}
-
-async function generateAuthOptions(userEmail: string) {
-  const user = await prisma.user.findUnique({
-    where: { email: userEmail },
-    select: {
-      id: true,
-      mfaEnabled: true,
-      mfaMethod: true,
-      webAuthnCredentials: {
-        select: {
-          credentialId: true,
-          transports: true,
-        },
-      },
-    },
-  })
-
-  if (!user || !user.mfaEnabled || user.mfaMethod !== 'security_key') {
-    return NextResponse.json({ error: 'WebAuthn not enabled for this user' }, { status: 400 })
-  }
-
-  const options = await generateAuthenticationOptions({
-    rpID:
-      process.env.NODE_ENV === 'production'
-        ? process.env.WEBAUTHN_RP_ID || 'everything-assistant.com'
-        : 'localhost',
-    timeout: 120000,
-    userVerification: 'preferred',
-    allowCredentials: user.webAuthnCredentials.map(cred => ({
-      id: cred.credentialId,
-      type: 'public-key' as const,
-      transports: cred.transports.filter(isAuthenticatorTransport),
-    })),
-  })
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      tempMfaSecret: options.challenge,
-      tempMfaExpires: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
-    },
-  })
-
-  return NextResponse.json(options)
-}
-
-async function verifyAuthCredential(
-  credential: WebAuthnAuthenticationCredential,
-  userEmail: string,
-  request: NextRequest
-) {
-  const user = await prisma.user.findUnique({
-    where: { email: userEmail },
-    select: {
-      id: true,
-      mfaEnabled: true,
-      mfaMethod: true,
-      tempMfaSecret: true,
-      tempMfaExpires: true,
-      webAuthnCredentials: {
-        select: {
-          id: true,
-          credentialId: true,
-          publicKey: true, // Buffer | Uint8Array
-          counter: true,
-          transports: true, // string[]
-        },
-      },
-    },
-  })
-
-  if (
-    !user ||
-    !user.mfaEnabled ||
-    user.mfaMethod !== 'security_key' ||
-    !user.tempMfaSecret ||
-    (user.tempMfaExpires && new Date() > user.tempMfaExpires)
-  ) {
-    return NextResponse.json(
-      { error: 'WebAuthn not enabled or challenge missing/expired' },
-      { status: 400 }
-    )
-  }
-
-  const stored = user.webAuthnCredentials.find(c => c.credentialId === credential.id)
-  if (!stored) {
-    await logSecurityEvent(
-      user.id,
-      'MFA_WEBAUTHN_AUTH_FAILED',
-      {
-        method: user.mfaMethod,
-        credentialId: credential.id,
-        reason: 'no_matching_credential',
-      },
-      request
-    )
-    return NextResponse.json({ error: 'No matching credential found' }, { status: 400 })
-  }
-
-  const credentialPublicKey = Buffer.isBuffer(stored.publicKey)
-    ? new Uint8Array(stored.publicKey)
-    : new Uint8Array(Buffer.from(stored.publicKey))
-
-  const prevCounter = typeof stored.counter === 'bigint' ? Number(stored.counter) : stored.counter
-
-  const formattedResponse = {
-    id: credential.id,
-    rawId: credential.rawId,
-    type: credential.type,
-    response: {
-      authenticatorData: credential.response.authenticatorData,
-      clientDataJSON: credential.response.clientDataJSON,
-      signature: credential.response.signature,
-      userHandle: credential.response.userHandle ?? undefined,
-    },
-    clientExtensionResults: credential.clientExtensionResults || {},
-  }
-
-  const filteredTransports: AuthenticatorTransport[] = stored.transports.filter(isAuthenticatorTransport)
-  const transportsToUse = filteredTransports.length ? filteredTransports : VALID_TRANSPORTS
-
-  const verificationOpts: VerifyAuthenticationResponseOpts = {
-    response: formattedResponse,
-    expectedChallenge: user.tempMfaSecret,
-    expectedOrigin:
-      process.env.NODE_ENV === 'production'
-        ? (process.env.WEBAUTHN_ORIGIN ?? '')
-        : 'http://localhost:3000',
-    expectedRPID: process.env.NODE_ENV === 'production' ? (process.env.WEBAUTHN_RP_ID ?? '') : 'localhost',
-    credential: {
-      id: stored.credentialId,
-      publicKey: credentialPublicKey,
-      counter: prevCounter,
-      transports: transportsToUse,
-    },
-    requireUserVerification: false,
-  }
-
-  const verification = await verifyAuthenticationResponse(verificationOpts)
-  if (!verification.verified) {
-    await logSecurityEvent(
-      user.id,
-      'MFA_WEBAUTHN_AUTH_FAILED',
-      { method: user.mfaMethod, credentialId: stored.credentialId, reason: 'verification_failed' },
-      request
-    )
-    return NextResponse.json({ error: 'WebAuthn authentication failed' }, { status: 400 })
-  }
-
-  if (verification.authenticationInfo?.newCounter !== undefined) {
-    await prisma.webAuthnCredential.update({
-      where: { id: stored.id },
-      data: {
-        counter: BigInt(verification.authenticationInfo.newCounter),
-        lastUsedAt: new Date(),
-      },
-    })
-  }
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { tempMfaSecret: null, tempMfaExpires: null },
-  })
-
-  await logSecurityEvent(
-    user.id,
-    'MFA_WEBAUTHN_AUTH_SUCCESS',
-    { method: user.mfaMethod, credentialId: stored.credentialId },
-    request
-  )
-  return NextResponse.json({ success: true, message: 'WebAuthn authentication successful' })
 }

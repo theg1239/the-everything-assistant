@@ -29,9 +29,7 @@ export const webAuthnRegistrationCredentialSchema = webAuthnBaseSchema.extend({
   }),
 })
 
-export type WebAuthnRegistrationCredential = z.infer<
-  typeof webAuthnRegistrationCredentialSchema
->
+export type WebAuthnRegistrationCredential = z.infer<typeof webAuthnRegistrationCredentialSchema>
 
 export const webAuthnAuthenticationCredentialSchema = webAuthnBaseSchema.extend({
   response: z.object({
@@ -206,3 +204,48 @@ export const webAuthnRequestOptionsSchema = z.object({
     .optional(),
   userVerification: z.enum(['required', 'preferred', 'discouraged']).optional(),
 })
+
+/**
+ * Sensitive MFA/account changes (disable MFA, regenerate backup codes, change method, register
+ * a security key while MFA is on, delete the account) need an MFA verification from the last
+ * 10 minutes. Otherwise the route answers `403 { error: MFA_STEP_UP_REQUIRED }`: re-verify via
+ * `POST /api/auth/mfa-verify` (or the WebAuthn assertion routes), then retry the request.
+ * `useMFA().fetchWithStepUp` / `requestStepUp` in `contexts/mfa-context.tsx` do this for you.
+ */
+export const MFA_STEP_UP_REQUIRED = 'MFA_STEP_UP_REQUIRED'
+
+export const mfaStepUpRequiredResponseSchema = z.object({
+  error: z.literal(MFA_STEP_UP_REQUIRED),
+  message: z.string().optional(),
+})
+export type MfaStepUpRequiredResponse = z.infer<typeof mfaStepUpRequiredResponseSchema>
+
+/** `deleteAccountAction()` (`app/actions/account.ts`) result. */
+export type DeleteAccountResult = { ok: true } | { ok: false; error: typeof MFA_STEP_UP_REQUIRED }
+
+/** Whether a parsed response body is the step-up signal. */
+export function isMfaStepUpRequired(body: unknown): boolean {
+  return mfaStepUpRequiredResponseSchema.safeParse(body).success
+}
+
+/**
+ * `POST /api/auth/mfa-verify`, `POST /api/user/mfa/verify-login`,
+ * `POST /api/user/mfa/webauthn/verify-auth` (and `/webauthn/authenticate` with a credential):
+ * on success the current session is recorded as MFA-verified server-side.
+ */
+export const mfaChallengeResponseSchema = z.object({
+  success: z.literal(true),
+  message: z.string().optional(),
+})
+export type MfaChallengeResponse = z.infer<typeof mfaChallengeResponseSchema>
+
+/**
+ * `POST /api/user/mfa/email-code`: emails a single-use 6-digit code (valid 10 min) for users
+ * whose method is `email`. `sent: false` means a code was sent less than a minute ago.
+ */
+export const mfaEmailCodeResponseSchema = z.object({
+  success: z.literal(true),
+  sent: z.boolean(),
+  message: z.string().optional(),
+})
+export type MfaEmailCodeResponse = z.infer<typeof mfaEmailCodeResponseSchema>

@@ -49,6 +49,7 @@ import { FeedbackSection } from '@/components/feedback-section'
 import { MemoryManagement } from '@/components/memory-management'
 import { VTOPSettings } from '@/components/vtop-settings'
 import { deleteAccountAction } from '@/app/actions/account'
+import { useMFA } from '@/contexts/mfa-context'
 import { readApiMessage, readJson } from '@/lib/http'
 import { isRecord } from '@/lib/json'
 import { asRecord, errorMessage, readString } from '@/components/narrow'
@@ -260,6 +261,7 @@ export function SettingsDialog({
   initialSection,
 }: SettingsDialogProps) {
   const { data: session } = useSession()
+  const { fetchWithStepUp, requestStepUp } = useMFA()
   const { setBackgroundType, toggleBackground } = useCustomBackground()
   const { setIsOpen: setSidebarOpen } = useSidebar()
   const miniPlayerEnabled = useMiniPlayerStore(state => state.enabled)
@@ -1000,7 +1002,7 @@ export function SettingsDialog({
 
     setLoadingMfa(true)
     try {
-      const response = await fetch('/api/user/mfa', {
+      const response = await fetchWithStepUp('/api/user/mfa', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -1088,7 +1090,7 @@ export function SettingsDialog({
       console.warn('Could not check platform authenticator availability:', checkError)
     }
 
-    const optionsResponse = await fetch('/api/user/mfa/webauthn/register', {
+    const optionsResponse = await fetchWithStepUp('/api/user/mfa/webauthn/register', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1177,7 +1179,7 @@ export function SettingsDialog({
     }
 
     console.log('Sending credential to server for verification...')
-    const verifyResponse = await fetch('/api/user/mfa/webauthn/verify', {
+    const verifyResponse = await fetchWithStepUp('/api/user/mfa/webauthn/verify', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1268,7 +1270,7 @@ export function SettingsDialog({
   const generateNewBackupCodes = async () => {
     setLoadingMfa(true)
     try {
-      const response = await fetch('/api/user/mfa/backup-codes', {
+      const response = await fetchWithStepUp('/api/user/mfa/backup-codes', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1346,7 +1348,7 @@ export function SettingsDialog({
     setMethodChangeError(null)
     setMethodChangeCode('')
     try {
-      const response = await fetch('/api/user/mfa/method', {
+      const response = await fetchWithStepUp('/api/user/mfa/method', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -1424,7 +1426,7 @@ export function SettingsDialog({
           'Switched to security key. Your backup codes were regenerated: save the new ones below.'
         )
       } else {
-        const response = await fetch('/api/user/mfa/method', {
+        const response = await fetchWithStepUp('/api/user/mfa/method', {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
@@ -1624,8 +1626,14 @@ export function SettingsDialog({
     setDeletingAccount(true)
     setConfirmDeleteAccount(false)
     try {
-      await deleteAccountAction()
-      toast.success('account deleted ΓÇö signing you out')
+      let result = await deleteAccountAction()
+      if (!result.ok) {
+        // Deleting the account needs a recent MFA verification; prompt once and retry.
+        if (!(await requestStepUp())) return
+        result = await deleteAccountAction()
+      }
+      if (!result.ok) throw new Error('please verify your identity to delete your account')
+      toast.success('account deleted — signing you out')
       await signOut({ callbackUrl: '/login' })
     } catch (error) {
       console.error('failed to delete account', error)
@@ -1781,7 +1789,7 @@ export function SettingsDialog({
                     >
                       {deletingAccount ? (
                         <>
-                          <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> deletingΓÇª
+                          <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> deleting…
                         </>
                       ) : confirmDeleteAccount ? (
                         'confirm delete?'

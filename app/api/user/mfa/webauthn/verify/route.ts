@@ -1,11 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { generateBackupCodes, hashBackupCodes, logSecurityEvent } from '@/lib/mfa'
+import { generateBackupCodes, getMfaPepper, hashBackupCodes, logSecurityEvent } from '@/lib/mfa'
 import { verifyRegistrationResponse } from '@simplewebauthn/server'
 import type { VerifyRegistrationResponseOpts } from '@simplewebauthn/server'
+import { webAuthnRelyingParty } from '@/lib/mfa-challenge'
+import {
+  getMfaKv,
+  hasFreshMfa,
+  limitVerificationAttempt,
+  mfaStepUpRequiredResponse,
+  mfaUnavailableResponse,
+  recordCurrentSessionVerification,
+} from '@/lib/session'
 import { webAuthnRegistrationSchema } from '@/types/api/mfa'
 
+/**
+ * Completes security-key registration (enrolment, or switching method). When MFA is already
+ * enabled this requires a recent MFA verification (step-up); on enrolment the session is
+ * marked MFA-verified.
+ */
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()
@@ -21,9 +35,10 @@ export async function POST(request: NextRequest) {
     const { credential, method } = parsedBody.data
 
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { id: session.user.id },
       select: {
         id: true,
+        mfaEnabled: true,
         tempMfaMethod: true,
         tempMfaSecret: true,
         tempMfaExpires: true,
@@ -33,6 +48,15 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
+
+    if (!(await hasFreshMfa({ userId: user.id, mfaEnabled: user.mfaEnabled }))) {
+      return mfaStepUpRequiredResponse()
+    }
+
+    const kv = getMfaKv()
+    if (!kv) return mfaUnavailableResponse()
+    const limited = await limitVerificationAttempt(kv, user.id, request)
+    if (limited) return limited
 
     if (user.tempMfaMethod !== method) {
       return NextResponse.json({ error: 'Method mismatch' }, { status: 400 })
@@ -47,29 +71,14 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      console.log('Received credential structure:', {
-        id: credential.id,
-        type: credential.type,
-        rawIdType: typeof credential.rawId,
-        responseType: typeof credential.response,
-        hasAttestationObject: !!credential.response?.attestationObject,
-        hasClientDataJSON: !!credential.response?.clientDataJSON,
-      })
-
       const verificationOpts: VerifyRegistrationResponseOpts = {
         response: {
           ...credential,
           clientExtensionResults: credential.clientExtensionResults ?? {},
         },
         expectedChallenge: user.tempMfaSecret,
-        expectedOrigin:
-          process.env.NODE_ENV === 'production'
-            ? process.env.WEBAUTHN_ORIGIN || 'https://everything-assistant.com'
-            : 'http://localhost:3000',
-        expectedRPID:
-          process.env.NODE_ENV === 'production'
-            ? process.env.WEBAUTHN_RP_ID || 'everything-assistant.com'
-            : 'localhost',
+        expectedOrigin: webAuthnRelyingParty().origin,
+        expectedRPID: webAuthnRelyingParty().rpID,
         requireUserVerification: false,
       }
       const verification = await verifyRegistrationResponse(verificationOpts)
@@ -92,7 +101,7 @@ export async function POST(request: NextRequest) {
       const credentialIdBase64url = credential.id
 
       const backupCodes = generateBackupCodes()
-      const hashedBackupCodes = hashBackupCodes(backupCodes)
+      const hashedBackupCodes = hashBackupCodes(backupCodes, getMfaPepper())
 
       await prisma.webAuthnCredential.create({
         data: {
@@ -118,6 +127,18 @@ export async function POST(request: NextRequest) {
           backupCodes: hashedBackupCodes,
         },
       })
+
+      if (!user.mfaEnabled) {
+        try {
+          await recordCurrentSessionVerification({
+            userId: user.id,
+            factor: 'security_key',
+            sessionExpires: session.expires,
+          })
+        } catch (error) {
+          console.error('[mfa] failed to record verification after enrolment', error)
+        }
+      }
 
       await logSecurityEvent(
         user.id,

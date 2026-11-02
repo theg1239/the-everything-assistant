@@ -68,7 +68,7 @@ export default function VTOPPage() {
           { title: 'das', description: 'submission deadlines and status tracking' },
         ]}
         tips={[
-          'your credentials are encrypted and never stored',
+          'your credentials are encrypted on our servers and never sent back to your browser',
           'link your vtop once, access everything seamlessly',
           'ask in natural language - no need to memorize commands',
         ]}

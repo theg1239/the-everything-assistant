@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
+import { useState, useEffect, useRef } from 'react'
+import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { useMFA } from '@/contexts/mfa-context'
@@ -13,6 +14,7 @@ import { readApiMessage, readJson } from '@/lib/http'
 import { asRecord, errorMessage, readString } from '@/components/narrow'
 import type { AuthenticatorTransport } from '@simplewebauthn/server'
 import {
+  mfaEmailCodeResponseSchema,
   mfaStatusResponseSchema,
   webAuthnRequestOptionsSchema,
   type MfaStatusResponse,
@@ -60,36 +62,83 @@ const arrayBufferToBase64url = (buffer: ArrayBuffer | ArrayBufferView): string =
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
 }
 
-export function MFAChallenge() {
-  const [code, setCode] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [mfaStatus, setMFAStatus] = useState<MfaStatusResponse | null>(null)
-  const [isBackupMode, setIsBackupMode] = useState(false)
-  const { data: session } = useSession()
-  const { setMFAVerified } = useMFA()
-  useEffect(() => {
-    if (!session?.user) {
+function webAuthnErrorMessage(error: unknown): string {
+  const errorName = readString(asRecord(error)?.name)
+  if (errorName === 'NotAllowedError') {
+    return 'Authentication was cancelled, timed out, or blocked. Please try again and ensure you approve any browser prompts.'
+  }
+  if (errorName === 'InvalidStateError') {
+    return 'No registered authenticator found. Please check your device settings or try registering again.'
+  }
+  if (errorName === 'SecurityError') {
+    return 'Security error - this may be due to an insecure connection or invalid configuration.'
+  }
+  if (errorName === 'AbortError') return 'Authentication was aborted. Please try again.'
+  if (errorName === 'ConstraintError') {
+    return 'Authentication constraints not satisfied. Please check your authenticator settings.'
+  }
+  return errorMessage(error) || 'Authentication failed'
+}
+
+/** Asks the server to email a login/step-up code (it enforces a resend cooldown). */
+async function requestEmailCode(): Promise<void> {
+  try {
+    const response = await fetch('/api/user/mfa/email-code', { method: 'POST' })
+    if (!response.ok) {
+      const { error } = await readApiMessage(response)
+      toast.error(error || 'Failed to send verification code')
       return
     }
-
-    fetchMFAStatus()
-  }, [session])
-
-  const fetchMFAStatus = async () => {
-    try {
-      const response = await fetch('/api/user/mfa')
-      if (!response.ok) {
-        throw new Error('Failed to fetch MFA status')
-      }
-      const data = await readJson(response, mfaStatusResponseSchema)
-      setMFAStatus(data)
-    } catch (error) {
-      console.error('Failed to fetch MFA status:', error)
-      toast.error('Failed to load MFA information')
-    }
+    const data = await readJson(response, mfaEmailCodeResponseSchema)
+    if (data.sent) toast.success(data.message || 'Verification code sent to your email')
+    else if (data.message) toast.info(data.message)
+  } catch (error) {
+    console.error('Failed to send MFA email code:', error)
+    toast.error('Failed to send verification code')
   }
+}
+
+interface MfaChallengeCardProps {
+  mfaStatus: MfaStatusResponse
+  /** Called once the server has recorded the verification for this session. */
+  onVerified: () => void | Promise<void>
+  /** Escape hatch under the form: "cancel" for step-up, "sign out" for the login challenge. */
+  secondaryAction: { label: string; onClick: () => void }
+  title: React.ReactNode
+}
+
+/**
+ * The challenge itself (security key, authenticator/email code, or backup code). Every
+ * verification endpoint records the result server-side; the caller only refreshes UI state.
+ */
+function MfaChallengeCard({
+  mfaStatus,
+  onVerified,
+  secondaryAction,
+  title,
+}: MfaChallengeCardProps) {
+  const [code, setCode] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [isBackupMode, setIsBackupMode] = useState(false)
+  const [isSendingEmail, setIsSendingEmail] = useState(false)
+  const emailRequested = useRef(false)
+  const isEmailMethod = mfaStatus.mfaMethod === 'email'
+
+  const resendEmailCode = async () => {
+    setIsSendingEmail(true)
+    await requestEmailCode()
+    setIsSendingEmail(false)
+  }
+
+  // Email users get a code as soon as the challenge opens.
+  useEffect(() => {
+    if (!isEmailMethod || emailRequested.current) return
+    emailRequested.current = true
+    void requestEmailCode()
+  }, [isEmailMethod])
+
   const handleWebAuthnAuth = async () => {
-    if (!mfaStatus || mfaStatus.mfaMethod !== 'security_key') {
+    if (mfaStatus.mfaMethod !== 'security_key') {
       return
     }
 
@@ -117,9 +166,8 @@ export function MFAChallenge() {
             }))
           : undefined
 
-      const challengeBuffer = base64urlToArrayBuffer(options.challenge)
       const authenticationOptions: PublicKeyCredentialRequestOptions = {
-        challenge: challengeBuffer,
+        challenge: base64urlToArrayBuffer(options.challenge),
         timeout: options.timeout,
         rpId: options.rpId,
         allowCredentials,
@@ -127,34 +175,6 @@ export function MFAChallenge() {
         // Server never requests extensions; JSON-form extensions (e.g. PRF)
         // would need BufferSource conversion before reaching the DOM API.
       }
-
-      console.log('WebAuthn authentication options:', {
-        method: mfaStatus?.mfaMethod,
-        hasAllowCredentials: !!authenticationOptions.allowCredentials?.length,
-        userVerification: authenticationOptions.userVerification,
-        timeout: authenticationOptions.timeout,
-        rpId: authenticationOptions.rpId,
-        challenge: (() => {
-          const buffer = challengeBuffer
-          return (
-            Array.from(new Uint8Array(buffer))
-              .slice(0, 10)
-              .join(',') + '...'
-          )
-        })(),
-        allowCredentials: authenticationOptions.allowCredentials?.map(cred => ({
-          transports: cred.transports,
-          type: cred.type,
-        })),
-      })
-
-      console.log('About to call navigator.credentials.get with:', {
-        publicKey: {
-          ...authenticationOptions,
-          challenge: '[Uint8Array]',
-          allowCredentials: authenticationOptions.allowCredentials,
-        },
-      })
 
       let credential: PublicKeyCredential | null
       try {
@@ -206,9 +226,7 @@ export function MFAChallenge() {
               authenticatorData: arrayBufferToBase64url(response.authenticatorData),
               clientDataJSON: arrayBufferToBase64url(response.clientDataJSON),
               signature: arrayBufferToBase64url(response.signature),
-              userHandle: response.userHandle
-                ? arrayBufferToBase64url(response.userHandle)
-                : null,
+              userHandle: response.userHandle ? arrayBufferToBase64url(response.userHandle) : null,
             },
             type: credential.type,
             clientExtensionResults: credential.getClientExtensionResults?.() || {},
@@ -220,34 +238,13 @@ export function MFAChallenge() {
 
       if (verifyResponse.ok) {
         toast.success('Authentication successful!')
-        setMFAVerified(true)
+        await onVerified()
       } else {
         toast.error(data.error || 'Authentication failed')
       }
     } catch (error) {
       console.error('WebAuthn authentication error:', error)
-      const errorName = readString(asRecord(error)?.name)
-      if (errorName === 'NotAllowedError') {
-        toast.error(
-          'Authentication was cancelled, timed out, or blocked. Please try again and ensure you approve any browser prompts.'
-        )
-      } else if (errorName === 'InvalidStateError') {
-        toast.error(
-          'No registered authenticator found. Please check your device settings or try registering again.'
-        )
-      } else if (errorName === 'SecurityError') {
-        toast.error(
-          'Security error - this may be due to an insecure connection or invalid configuration.'
-        )
-      } else if (errorName === 'AbortError') {
-        toast.error('Authentication was aborted. Please try again.')
-      } else if (errorName === 'ConstraintError') {
-        toast.error(
-          'Authentication constraints not satisfied. Please check your authenticator settings.'
-        )
-      } else {
-        toast.error(errorMessage(error) || 'Authentication failed')
-      }
+      toast.error(webAuthnErrorMessage(error))
     } finally {
       setIsLoading(false)
     }
@@ -257,7 +254,7 @@ export function MFAChallenge() {
     e.preventDefault()
     if (!code.trim()) return
 
-    if (isBackupMode && mfaStatus && mfaStatus.backupCodesCount === 0) {
+    if (isBackupMode && mfaStatus.backupCodesCount === 0) {
       toast.error(
         'No backup codes available. Please use your authenticator app or contact support.'
       )
@@ -281,7 +278,7 @@ export function MFAChallenge() {
         if (data.message?.includes('remaining')) {
           toast.info(data.message)
         }
-        setMFAVerified(true)
+        await onVerified()
       } else {
         toast.error(data.error || `Invalid ${isBackupMode ? 'backup code' : 'verification code'}`)
         setCode('')
@@ -299,6 +296,163 @@ export function MFAChallenge() {
     setIsBackupMode(!isBackupMode)
     setCode('')
   }
+
+  return (
+    <Card className="bg-slate-900/80 backdrop-blur-xl border-slate-600/60 shadow-2xl shadow-purple-500/30 relative">
+      <CardHeader className="text-center space-y-4">
+        {title}
+        <CardDescription className="text-slate-200">
+          {isBackupMode
+            ? 'enter your backup code'
+            : mfaStatus.mfaMethod === 'email'
+              ? 'enter the verification code sent to your email'
+              : mfaStatus.mfaMethod === 'security_key'
+                ? 'use your authenticator (Windows Hello, Touch ID, external key, etc.)'
+                : 'enter the code from your authenticator app'}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {!isBackupMode && mfaStatus.mfaMethod === 'security_key' ? (
+          <div className="space-y-4">
+            <div className="text-center">
+              <Button
+                onClick={handleWebAuthnAuth}
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 shadow-lg hover:shadow-xl transition-all duration-200"
+                size="lg"
+                disabled={isLoading}
+              >
+                {isLoading ? `authenticating...` : 'authenticate with security key'}
+              </Button>
+            </div>
+
+            <div className="text-center">
+              <Button
+                variant="ghost"
+                onClick={toggleMode}
+                className="text-slate-300 hover:text-white text-sm"
+                disabled={isLoading}
+              >
+                use backup code instead
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleVerifyCode} className="space-y-4">
+            <div>
+              <Input
+                type="text"
+                placeholder={isBackupMode ? 'Enter backup code' : 'Enter verification code'}
+                value={code}
+                onChange={e => setCode(e.target.value)}
+                className="bg-slate-800/50 border-slate-600 text-white placeholder-slate-400 text-center text-lg tracking-widest"
+                maxLength={isBackupMode ? 20 : 6}
+                autoComplete="one-time-code"
+                disabled={isLoading}
+                autoFocus
+              />
+            </div>
+            <Button
+              type="submit"
+              className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 shadow-lg hover:shadow-xl transition-all duration-200"
+              size="lg"
+              disabled={isLoading || !code.trim()}
+            >
+              {isLoading ? 'verifying...' : 'verify'}
+            </Button>
+
+            {!isBackupMode && isEmailMethod && (
+              <div className="text-center">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => void resendEmailCode()}
+                  className="text-slate-300 hover:text-white text-sm"
+                  disabled={isLoading || isSendingEmail}
+                >
+                  {isSendingEmail ? 'sending...' : 'resend code'}
+                </Button>
+              </div>
+            )}
+
+            <div className="text-center">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={toggleMode}
+                className="text-slate-300 hover:text-white text-sm"
+                disabled={isLoading}
+              >
+                {isBackupMode
+                  ? mfaStatus.mfaMethod === 'security_key'
+                    ? 'use security key instead'
+                    : mfaStatus.mfaMethod === 'email'
+                      ? 'use email code instead'
+                      : 'use authenticator app instead'
+                  : 'use backup code instead'}
+              </Button>
+            </div>
+          </form>
+        )}
+        <div className="text-center">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={secondaryAction.onClick}
+            className="text-slate-400 hover:text-white text-sm"
+            disabled={isLoading}
+          >
+            {secondaryAction.label}
+          </Button>
+        </div>
+        <div className="text-xs text-slate-400 text-center">
+          {isBackupMode
+            ? 'having trouble? try using your primary authentication method instead'
+            : mfaStatus.mfaMethod === 'email'
+              ? 'having trouble? check your email for the latest code'
+              : mfaStatus.mfaMethod === 'security_key'
+                ? 'having trouble? ensure your authenticator is working or device security is set up'
+                : 'having trouble? check your authenticator app for the latest code'}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+/** Loads the user's MFA method (`GET /api/user/mfa`, which accepts sessions pending MFA). */
+function useMfaStatus(): MfaStatusResponse | null {
+  const { data: session } = useSession()
+  const [mfaStatus, setMFAStatus] = useState<MfaStatusResponse | null>(null)
+  const userId = session?.user?.id
+
+  useEffect(() => {
+    if (!userId) return
+    let cancelled = false
+    const load = async () => {
+      try {
+        const response = await fetch('/api/user/mfa')
+        if (!response.ok) {
+          throw new Error('Failed to fetch MFA status')
+        }
+        const data = await readJson(response, mfaStatusResponseSchema)
+        if (!cancelled) setMFAStatus(data)
+      } catch (error) {
+        console.error('Failed to fetch MFA status:', error)
+        toast.error('Failed to load MFA information')
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [userId])
+
+  return mfaStatus
+}
+
+/** Full-screen challenge shown by `MFAGate` until the session passes MFA. */
+export function MFAChallenge() {
+  const mfaStatus = useMfaStatus()
+  const { completeVerification } = useMFA()
 
   if (!mfaStatus) {
     return (
@@ -318,97 +472,58 @@ export function MFAChallenge() {
         transition={{ duration: 0.6, ease: 'easeOut' }}
         className="relative z-10 w-full max-w-md"
       >
-        <Card className="bg-slate-900/80 backdrop-blur-xl border-slate-600/60 shadow-2xl shadow-purple-500/30 relative">
-          <CardHeader className="text-center space-y-4">
+        <MfaChallengeCard
+          mfaStatus={mfaStatus}
+          onVerified={completeVerification}
+          secondaryAction={{
+            label: 'sign out',
+            onClick: () => void signOut({ callbackUrl: '/login' }),
+          }}
+          title={
             <CardTitle className="text-2xl font-light text-white drop-shadow-lg">
               verify your identity
-            </CardTitle>{' '}
-            <CardDescription className="text-slate-200">
-              {isBackupMode
-                ? 'enter your backup code'
-                : mfaStatus.mfaMethod === 'email'
-                  ? 'enter the verification code sent to your email'
-                  : mfaStatus.mfaMethod === 'security_key'
-                    ? 'use your authenticator (Windows Hello, Touch ID, external key, etc.)'
-                    : 'enter the code from your authenticator app'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {!isBackupMode && mfaStatus.mfaMethod === 'security_key' ? (
-              <div className="space-y-4">
-                <div className="text-center">
-                  <Button
-                    onClick={handleWebAuthnAuth}
-                    className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 shadow-lg hover:shadow-xl transition-all duration-200"
-                    size="lg"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? `authenticating...` : 'authenticate with security key'}
-                  </Button>
-                </div>
-
-                <div className="text-center">
-                  <Button
-                    variant="ghost"
-                    onClick={toggleMode}
-                    className="text-slate-300 hover:text-white text-sm"
-                    disabled={isLoading}
-                  >
-                    use backup code instead
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <form onSubmit={handleVerifyCode} className="space-y-4">
-                <div>
-                  <Input
-                    type="text"
-                    placeholder={isBackupMode ? 'Enter backup code' : 'Enter verification code'}
-                    value={code}
-                    onChange={e => setCode(e.target.value)}
-                    className="bg-slate-800/50 border-slate-600 text-white placeholder-slate-400 text-center text-lg tracking-widest"
-                    maxLength={isBackupMode ? 20 : 6}
-                    disabled={isLoading}
-                    autoFocus
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 shadow-lg hover:shadow-xl transition-all duration-200"
-                  size="lg"
-                  disabled={isLoading || !code.trim()}
-                >
-                  {isLoading ? 'verifying...' : 'verify'}
-                </Button>
-
-                <div className="text-center">
-                  <Button
-                    variant="ghost"
-                    onClick={toggleMode}
-                    className="text-slate-300 hover:text-white text-sm"
-                    disabled={isLoading}
-                  >
-                    {isBackupMode
-                      ? mfaStatus.mfaMethod === 'security_key'
-                        ? 'use security key instead'
-                        : 'use authenticator app instead'
-                      : 'use backup code instead'}
-                  </Button>
-                </div>
-              </form>
-            )}
-            <div className="text-xs text-slate-400 text-center">
-              {isBackupMode
-                ? 'having trouble? try using your primary authentication method instead'
-                : mfaStatus.mfaMethod === 'email'
-                  ? 'having trouble? check your email for the latest code'
-                  : mfaStatus.mfaMethod === 'security_key'
-                    ? 'having trouble? ensure your authenticator is working or device security is set up'
-                    : 'having trouble? check your authenticator app for the latest code'}
-            </div>
-          </CardContent>
-        </Card>
+            </CardTitle>
+          }
+        />
       </motion.div>
     </LoginFloatingBackground>
+  )
+}
+
+/**
+ * Step-up challenge as a dialog (stacks above other Radix dialogs such as settings), opened by
+ * `useMFA().requestStepUp()` before sensitive changes.
+ */
+export function MfaStepUpDialog({
+  onVerified,
+  onCancel,
+}: {
+  onVerified: () => void
+  onCancel: () => void
+}) {
+  const mfaStatus = useMfaStatus()
+
+  return (
+    <Dialog open onOpenChange={open => !open && onCancel()}>
+      <DialogContent className="max-w-md border-0 bg-transparent p-0 shadow-none">
+        <DialogDescription className="sr-only">
+          Confirm it's you with your second factor to continue.
+        </DialogDescription>
+        {mfaStatus ? (
+          <MfaChallengeCard
+            mfaStatus={mfaStatus}
+            onVerified={onVerified}
+            secondaryAction={{ label: 'cancel', onClick: onCancel }}
+            title={
+              <DialogTitle className="text-2xl font-light text-white">confirm it's you</DialogTitle>
+            }
+          />
+        ) : (
+          <DialogTitle className="py-10 text-center text-sm font-normal text-white">
+            loading…
+          </DialogTitle>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }

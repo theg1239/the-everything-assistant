@@ -1,9 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { generateRegistrationOptions } from '@simplewebauthn/server'
+import { webAuthnRelyingParty } from '@/lib/mfa-challenge'
+import { hasFreshMfa, mfaStepUpRequiredResponse } from '@/lib/session'
 
-export async function POST(request: NextRequest) {
+/**
+ * Registration options for a security key (enrolment, or switching method). When MFA is
+ * already enabled this requires a recent MFA verification (step-up).
+ */
+export async function POST() {
   try {
     const session = await auth()
     if (!session?.user?.email) {
@@ -11,9 +17,10 @@ export async function POST(request: NextRequest) {
     }
 
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { id: session.user.id },
       select: {
         id: true,
+        mfaEnabled: true,
         tempMfaMethod: true,
         tempMfaExpires: true,
       },
@@ -21,6 +28,10 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    if (!(await hasFreshMfa({ userId: user.id, mfaEnabled: user.mfaEnabled }))) {
+      return mfaStepUpRequiredResponse()
     }
 
     if (!user.tempMfaMethod || user.tempMfaMethod !== 'security_key') {
@@ -33,10 +44,7 @@ export async function POST(request: NextRequest) {
 
     const options = await generateRegistrationOptions({
       rpName: 'The Everything Assistant',
-      rpID:
-        process.env.NODE_ENV === 'production'
-          ? process.env.WEBAUTHN_RP_ID || 'everything-assistant.com'
-          : 'localhost',
+      rpID: webAuthnRelyingParty().rpID,
       userID: new TextEncoder().encode(session.user.email),
       userName: session.user.email,
       userDisplayName: session.user.name || session.user.email,
@@ -51,21 +59,6 @@ export async function POST(request: NextRequest) {
       supportedAlgorithmIDs: [-7, -257],
       excludeCredentials: [],
     })
-
-    console.log(
-      'Generated WebAuthn options for security_key:',
-      JSON.stringify(
-        {
-          rpName: options.rp.name,
-          rpID: options.rp.id,
-          userEmail: session.user.email,
-          timeout: options.timeout,
-          authenticatorSelection: options.authenticatorSelection,
-        },
-        null,
-        2
-      )
-    )
 
     await prisma.user.update({
       where: { id: user.id },

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-require('dotenv').config()
+require('dotenv').config({ quiet: true })
 const RedditScraper = require('../scrapers/reddit-scraper')
 const logger = require('../utils/logger')
 const { spawn } = require('child_process')

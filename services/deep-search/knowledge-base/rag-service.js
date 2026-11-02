@@ -318,15 +318,14 @@ CRITICAL RULES:
 
 Context: ${context}`
 
-    const messages = [
-      {
-        role: 'system',
-        content: systemPrompt,
-      },
-    ]
+    // AI SDK v7 rejects `role: 'system'` entries in `messages`; the system prompt goes in
+    // `instructions`, and client-supplied history is limited to user/assistant turns.
+    const messages = []
 
     conversationHistory.forEach(msg => {
-      messages.push(msg)
+      if (msg && (msg.role === 'user' || msg.role === 'assistant')) {
+        messages.push(msg)
+      }
     })
 
     messages.push({
@@ -336,6 +335,7 @@ Context: ${context}`
     try {
       const result = await generateText({
         model: this.chatModel,
+        instructions: systemPrompt,
         messages: messages,
         maxOutputTokens: 3000,
         providerOptions: {

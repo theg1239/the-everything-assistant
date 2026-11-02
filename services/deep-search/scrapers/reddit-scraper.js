@@ -1,9 +1,9 @@
-require('dotenv').config()
+require('dotenv').config({ quiet: true })
 
 const axios = require('axios')
 const cheerio = require('cheerio')
 const logger = require('../utils/logger')
-const { generateObject, embed } = require('ai')
+const { generateText, Output, embed } = require('ai')
 const { openai } = require('@ai-sdk/openai')
 const { z } = require('zod')
 const ImageAnalyzer = require('./image-analyzer')
@@ -678,10 +678,10 @@ Please provide:
 4. Brief summary
 5. Relevance to students (high/medium/low)`
 
-      const { object } = await generateObject({
+      const { output: object } = await generateText({
         model: openai('gpt-5.6-luna'),
         prompt,
-        schema: contentAnalysisSchema,
+        output: Output.object({ schema: contentAnalysisSchema }),
         maxOutputTokens: 1000,
         providerOptions: {
           openai: {
@@ -712,11 +712,7 @@ Please provide:
       const { embedding } = await embed({
         model: this.embeddingModel,
         value: text.substring(0, 8000),
-        providerOptions: {
-          openai: {
-            dimensions: this.embeddingDim,
-          },
-        },
+        dimensions: this.embeddingDim,
       })
       return embedding
     } catch (error) {
@@ -1454,9 +1450,9 @@ Please provide:
 
           const base64Image = resizedBuffer.toString('base64')
           frameImages.push({
-            type: 'image',
-            image: base64Image,
-            mimeType: 'image/jpeg',
+            type: 'file',
+            mediaType: 'image/jpeg',
+            data: { type: 'data', data: base64Image },
           })
         } catch (error) {
           logger.error(`Error processing frame ${framePaths[i]}: ${error.message}`)
@@ -1554,10 +1550,10 @@ Based on the post context, comments, and video frames, please analyze the video 
         },
       ]
 
-      const { object: analysis } = await generateObject({
+      const { output: analysis } = await generateText({
         model: openai('gpt-5.6-luna'),
         messages,
-        schema: videoAnalysisSchema,
+        output: Output.object({ schema: videoAnalysisSchema }),
         maxOutputTokens: 2000,
         providerOptions: {
           openai: {

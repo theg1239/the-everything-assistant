@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-require('dotenv').config()
+require('dotenv').config({ quiet: true })
 
-const { generateObject } = require('ai')
+const { generateText, Output } = require('ai')
 const { openai } = require('@ai-sdk/openai')
 const { z } = require('zod')
 
@@ -50,10 +50,10 @@ This is a test analysis for a programming tutorial video with 5 key frames.
 
 Please analyze and provide structured information about this educational video content.`
 
-    const { object } = await generateObject({
+    const { output: object } = await generateText({
       model: openai('gpt-5.6-luna'),
       prompt: testPrompt,
-      schema: videoAnalysisSchema,
+      output: Output.object({ schema: videoAnalysisSchema }),
       maxOutputTokens: 1000,
       providerOptions: {
         openai: {
@@ -91,10 +91,10 @@ async function testContentAnalysisSchema() {
 
     const testContent = `This is a great tutorial about machine learning algorithms. The professor explains neural networks clearly and provides practical examples. Students found it very helpful for their coursework.`
 
-    const { object } = await generateObject({
+    const { output: object } = await generateText({
       model: openai('gpt-5.6-luna'),
       prompt: `Analyze this Reddit content: "${testContent}"`,
-      schema: contentAnalysisSchema,
+      output: Output.object({ schema: contentAnalysisSchema }),
       maxOutputTokens: 500,
       providerOptions: {
         openai: {

@@ -58,7 +58,7 @@ class AgenticRAGService {
 
     this.thinkingBudget = options.thinkingBudget !== undefined ? options.thinkingBudget : 1024
 
-    this.chatModel = openai('gpt-5.6-terra')
+    this.chatModel = openai('gpt-6.1-terra')
 
     this.maxIterations = 2
     this.relevanceThreshold = 0.5

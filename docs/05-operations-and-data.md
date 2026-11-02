@@ -23,7 +23,7 @@ This playbook covers everything that keeps the assistant’s knowledge current: 
 
 - Long-form markdown capturing rankings, admissions, FFCS rules, exam structures, GPA computation, etc.
 - Append sections here when documenting evergreen knowledge.
-- Remember to bump `scripts/seed-rag.ts` to re-embed new chunks (see §2).
+- The designated Vercel production build synchronizes the repository corpus after a successful Next.js build (see §2).
 
 ---
 
@@ -37,7 +37,13 @@ This playbook covers everything that keeps the assistant’s knowledge current: 
   1. Ensure `vit_rag_chunks` table exists (drop if `--fresh`).
   2. Combine `getContextForAIPrompt(includeAll=true)` + `VIT_COMPREHENSIVE_KNOWLEDGE`.
   3. Split into overlapping chunks via LangChain.
-  4. Embed with Gemini and insert rows.
+  4. Embed with the configured OpenAI embedding model and insert rows.
+
+### Automatic Vercel corpus sync
+
+The root build runs `scripts/sync-rag-vercel.ts` after `next build`. It only writes for a GitHub `main` production build of the main Vercel project (`www.everything-assistant.com`); previews, local builds, and other Vercel projects skip it. It requires the existing Vercel `DATABASE_URL2` and `OPENAI_API_KEY` and a provisioned `vit_rag_chunks` table with a compatible vector dimension. It checks the GitHub branch head before preparing and committing changes. A corpus/model fingerprint skips unchanged content; an advisory lock prevents concurrent syncs. New vectors are prepared before the generated corpus is replaced transactionally. Legacy `seed-rag-ts` and prior `vercel-rag-sync` rows are replaced; uploaded PDF and custom rows are preserved. Any error fails the build and rolls back the replacement. The sync runs during build, before Vercel promotes the deployment, so a later deployment failure can leave the successfully synced corpus ahead of the live app. Confirm index contents and deployment status independently.
+
+Do not use `--fresh` as an automatic update: it drops the entire table, including custom and PDF chunks. The manual seeder does not deduplicate generated corpus rows. Existing documents must use a compatible embedding model and dimension.
 
 ### Paper Indexing (`scripts/papers.ts`)
 
@@ -161,7 +167,7 @@ in the same vector index.
 
 - Implement `getToolCallStats` to populate admin charts and quickly detect runaway tools.
 - Consider auth on `/api/knowledge` before pushing to production.
-- Add a cron/deployment job to run `scripts/seed-rag.ts --fresh` whenever you update `lib/data` or `lib/knowledge-base.ts`.
+- Monitor production build syncs and verify the RAG corpus after changes.
 - Document the env expectations for `services/*` in their respective READMEs (many already include instructions, but verify them whenever you change APIs).
 - Keep `broadcast` slides fresh so the landing hero doesn’t become stale—tie this to product launches or exam seasons.
 
@@ -170,7 +176,7 @@ in the same vector index.
 ## 8. Quick Ops Checklist
 
 1. **Update context** (lib/data + knowledge base) whenever academic calendars or policies change.
-2. **Reseed RAG** after context updates (`scripts/seed-rag.ts`).
+2. **Verify RAG sync** after the production build and confirm the expected deployment became live.
 3. **Monitor rate limits** via `/api/(mgmt)/rate-limit-status` and rotate keys if needed.
 4. **Verify workflows** by sending yourself a `POST /hub/daily-briefing-email/test`.
 5. **Audit MFA** by checking `/api/user/mfa` responses and `SecurityLog`.

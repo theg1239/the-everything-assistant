@@ -580,7 +580,7 @@ export async function POST(req: Request) {
         parallelToolCalls: true,
         store: false,
         maxToolCalls: 4,
-        reasoningEffort: thinkHarder || modelId === 'gpt-5.6-sol' ? 'high' : 'none',
+        reasoningEffort: thinkHarder ? 'high' : 'none',
         reasoningSummary: 'detailed',
         promptCacheKey: openaiPromptCacheKey,
         ...(supportsOpenAIPromptCacheRetention(modelId) ? { promptCacheRetention: '24h' } : {}),

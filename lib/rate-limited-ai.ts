@@ -111,9 +111,8 @@ export class RateLimitedAI {
   private buildOptions(options: TextGenerationOptions): TextGenerationOptions {
     const { providerOverrides, ...rest } = options
     const override = providerOverrides?.openai ?? {}
-    const modelId = options.model?.modelId || modelRegistry.chat.modelId
     const openaiProviderOptions = {
-      reasoningEffort: modelId === 'gpt-5.6-sol' ? 'high' : 'none',
+      reasoningEffort: 'none',
       ...(rest.providerOptions?.openai ?? {}),
       ...(override.providerOptions?.openai ?? {}),
     }
@@ -123,7 +122,7 @@ export class RateLimitedAI {
       providerOptions: { openai: openaiProviderOptions },
     } as TextGenerationOptions
 
-    // GPT-5 family reasoning models reject temperature unless reasoning is disabled
+    // Reasoning models reject temperature unless reasoning is disabled
     // in a compatible request shape. Keep request behavior deterministic here.
     if (Object.prototype.hasOwnProperty.call(merged, 'temperature')) {
       delete merged.temperature

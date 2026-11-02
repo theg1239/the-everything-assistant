@@ -6,7 +6,7 @@ export function shouldSyncRag(env: Record<string, string | undefined>): boolean 
     env.VERCEL_GIT_PROVIDER === 'github' &&
     env.VERCEL_GIT_REPO_OWNER === 'theg1239' &&
     env.VERCEL_GIT_REPO_SLUG === 'the-everything-assistant' &&
-    env.VERCEL_GIT_COMMIT_REF === 'main' &&
+    ['main', 'stable', 'prod'].includes(env.VERCEL_GIT_COMMIT_REF || '') &&
     ['everything-assistant.com', 'www.everything-assistant.com'].includes(
       env.VERCEL_PROJECT_PRODUCTION_URL || ''
     )

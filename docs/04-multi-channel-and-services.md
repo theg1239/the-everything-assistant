@@ -62,7 +62,7 @@ Besides the main Next.js app, the repo contains several standalone services and 
 
 ### Purpose
 
-- Bridges the assistant and the VTOP CLI (binary stored in `services/proxy-service/binary*`).
+- Bridges the assistant and the VTOP CLI ([cli-top](https://cli-top.acmvit.in); Linux build committed at `services/proxy-service/binary`, override with `BINARY_PATH`).
 - Enforces OAuth 2.0 (PKCE) for MCP transports, so credentials never flow through chat payloads.
 - Exposes the same `hub-capabilities.json` manifest used by the UI to keep naming/parsers consistent.
 
@@ -93,7 +93,7 @@ See §5 in `03-tools-and-integrations.md` for data flow. Operational notes:
 - Node/Express app with verbose logging (request + response bodies).
 - `AgenticRAGService` and `RAGService` share the same `knowledge-base/knowledge-base` for direct vector lookups and fallback full-text search.
 - Scrapers support image OCR + Gemini Vision for memes/screenshots.
-- You can run `node cli.js scrape` to populate the DB, `node api-server.js` to serve endpoints, and `node test-zod-schema.js` / `test-video-analysis.js` for debugging.
+- You can run `node cli.js scrape` to populate the DB, `node api-server.js` to serve endpoints, and `npm run test:schema` / `npm run test:video` for debugging.
 
 ---
 

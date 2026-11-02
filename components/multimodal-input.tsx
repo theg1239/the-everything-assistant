@@ -26,7 +26,6 @@ import { Streamdown } from 'streamdown'
 import { streamdownPlugins } from '@/lib/streamdown-config'
 
 type PdfLibModule = typeof import('pdf-lib')
-type MammothModule = typeof import('mammoth/mammoth.browser')
 type Html2CanvasModule = typeof import('html2canvas')
 type DocxPreviewModule = typeof import('docx-preview')
 

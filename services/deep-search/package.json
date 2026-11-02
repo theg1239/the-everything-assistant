@@ -7,14 +7,12 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "scrape": "node cli.js scrape",
-    "test": "node test-service.js",
-    "test:video": "node test-video-analysis.js",
-    "test:schema": "node test-zod-schema.js",
+    "test:video": "node scripts/test-video-analysis.js",
+    "test:schema": "node scripts/test-zod-schema.js",
     "cli": "node cli.js",
     "init": "node cli.js init",
     "stats": "node cli.js stats",
     "status": "node cli.js status",
-    "migrate": "node migrate-vector-dimensions.js",
     "migrate:reddit-db": "node scripts/migrate-reddit-db.js",
     "benchmark:retrieval": "node scripts/benchmark-retrieval.js"
   },
@@ -41,7 +39,6 @@
     "zod": "latest"
   },
   "devDependencies": {
-    "jest": "latest",
     "nodemon": "latest"
   },
   "license": "MIT"

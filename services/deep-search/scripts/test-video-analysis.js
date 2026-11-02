@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 require('dotenv').config()
-const RedditScraper = require('./scrapers/reddit-scraper')
-const logger = require('./utils/logger')
+const RedditScraper = require('../scrapers/reddit-scraper')
+const logger = require('../utils/logger')
 const { spawn } = require('child_process')
 
 async function testVideoAnalysis(redditUrl = null) {
@@ -12,8 +12,8 @@ async function testVideoAnalysis(redditUrl = null) {
     console.log(`🔗 Target URL: ${redditUrl}\n`)
   } else {
     console.log('📖 Usage:')
-    console.log('   node test-video-analysis.js [REDDIT_URL]')
-    console.log('   node test-video-analysis.js https://www.reddit.com/r/Vit/comments/1lsfrj2/...')
+    console.log('   node scripts/test-video-analysis.js [REDDIT_URL]')
+    console.log('   node scripts/test-video-analysis.js https://www.reddit.com/r/Vit/comments/1lsfrj2/...')
     console.log('   (Without URL: tests with random video from r/videos)\n')
   }
 
@@ -260,9 +260,9 @@ if (require.main === module) {
 
   if (redditUrl && !redditUrl.includes('reddit.com')) {
     console.error('❌ Please provide a valid Reddit URL')
-    console.error('Usage: node test-video-analysis.js [REDDIT_URL]')
+    console.error('Usage: node scripts/test-video-analysis.js [REDDIT_URL]')
     console.error(
-      'Example: node test-video-analysis.js https://www.reddit.com/r/Vit/comments/1lsfrj2/mens_hostel_b_block_is_getting_converted_to/'
+      'Example: node scripts/test-video-analysis.js https://www.reddit.com/r/Vit/comments/1lsfrj2/mens_hostel_b_block_is_getting_converted_to/'
     )
     process.exit(1)
   }

@@ -32,3 +32,13 @@ export const imageModel = (modelId: string = DEFAULT_IMAGE_MODEL_ID) => openai.i
 export const defaultProviderOptions = {
   openai: { reasoningEffort: 'none' },
 } satisfies ProviderOptions
+
+/**
+ * OpenAI Decisions API model (`/v1/decisions`, about 10x faster than a Responses call) for
+ * narrow judgements: pick one of N options, yes/no, ordered scores. Never a replacement for
+ * the chat model. See lib/decisions.ts.
+ */
+export const DEFAULT_DECISION_MODEL_ID = 'gpt-6-luna'
+
+export const decisionModel = (modelId: string = process.env.DECISION_MODEL_ID || DEFAULT_DECISION_MODEL_ID) =>
+  openai.decisionModel(modelId)

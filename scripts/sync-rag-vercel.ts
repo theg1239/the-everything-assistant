@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'crypto'
+import { createHash } from 'crypto'
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters'
 import { encoding_for_model } from 'tiktoken'
 import pg from 'pg'
@@ -9,6 +9,7 @@ import { createOpenAI } from '@ai-sdk/openai'
 import { embed } from 'ai'
 
 import { ragSyncSkipReasons } from './rag-sync-policy'
+import { syncGeneratedCorpus } from './rag-sync-transaction'
 
 async function assertCurrentHead(sha: string, branch: string) {
   const response = await fetch(
@@ -63,58 +64,36 @@ async function main() {
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL2, max: 1 })
   const client = await pool.connect()
   try {
-    await client.query('BEGIN')
-    const lock = await client.query(
-      "SELECT pg_try_advisory_xact_lock(hashtext('vit-rag-sync-v1')) AS locked"
+    const result = await syncGeneratedCorpus({
+      client,
+      hash,
+      count: documents.length,
+      commit: sha,
+      model: ragEmbeddingModelId,
+      assertCurrentHead: () => assertCurrentHead(sha, branch),
+      prepareRows: async () => {
+        const embeddingModel = createOpenAI({ apiKey: process.env.OPENAI_API_KEY }).embedding(
+          ragEmbeddingModelId
+        )
+        const rows: Array<{ text: string; vector: number[] }> = []
+        for (const doc of documents) {
+          const { embedding } = await embed({ model: embeddingModel, value: doc.pageContent })
+          if (
+            embedding.length !== ragEmbeddingDim ||
+            embedding.some(value => !Number.isFinite(value))
+          ) {
+            throw new Error('Unexpected embedding dimension or value')
+          }
+          rows.push({ text: doc.pageContent.trim(), vector: embedding })
+        }
+        return rows
+      },
+    })
+    console.log(
+      result === 'current'
+        ? `RAG corpus already current (${documents.length} chunks)`
+        : `RAG corpus synced atomically (${documents.length} chunks)`
     )
-    if (!lock.rows[0].locked) throw new Error('Another RAG sync is running; retry the build')
-    // Fail safely if the table or expected vector dimension is not already provisioned.
-    const existing = await client.query(
-      "SELECT count(*)::int AS count FROM vit_rag_chunks WHERE metadata->>'source' = 'vercel-rag-sync' AND metadata->>'corpusHash' = $1",
-      [hash]
-    )
-    if (existing.rows[0].count === documents.length) {
-      await client.query('COMMIT')
-      console.log(`RAG corpus already current (${documents.length} chunks)`)
-      return
-    }
-    const embeddingModel = createOpenAI({ apiKey: process.env.OPENAI_API_KEY }).embedding(
-      ragEmbeddingModelId
-    )
-    const rows: Array<{ text: string; vector: number[] }> = []
-    for (const doc of documents) {
-      const { embedding } = await embed({
-        model: embeddingModel,
-        value: doc.pageContent,
-      })
-      if (embedding.length !== ragEmbeddingDim || embedding.some(value => !Number.isFinite(value)))
-        throw new Error('Unexpected embedding dimension or value')
-      rows.push({ text: doc.pageContent.trim(), vector: embedding })
-    }
-    await assertCurrentHead(sha, branch)
-    // Replace only repository-generated corpus rows. Preserve custom and PDF uploads.
-    await client.query(
-      "DELETE FROM vit_rag_chunks WHERE metadata->>'source' IN ('seed-rag-ts', 'vercel-rag-sync')"
-    )
-    for (const [idx, row] of rows.entries()) {
-      const metadata = {
-        source: 'vercel-rag-sync',
-        corpusHash: hash,
-        commit: sha,
-        model: ragEmbeddingModelId,
-        idx,
-        length: row.text.length,
-      }
-      await client.query(
-        'INSERT INTO vit_rag_chunks (id, chunk, metadata, embedding) VALUES ($1, $2, $3::jsonb, $4)',
-        [randomUUID(), row.text, JSON.stringify(metadata), '[' + row.vector.join(',') + ']']
-      )
-    }
-    await client.query('COMMIT')
-    console.log(`RAG corpus synced atomically (${rows.length} chunks)`)
-  } catch (error) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw error
   } finally {
     client.release()
     await pool.end()
